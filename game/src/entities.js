@@ -11,8 +11,9 @@ const ROCK_LOOK = {
   splitter: { fill: '#a78bca', shade: '#6f5596', rim: '#d9c6f2' },
   boulder:  { fill: '#9c7a5b', shade: '#66492e', rim: '#d9b98f' },
   comet:    { fill: '#ffb08a', shade: '#c25e3a', rim: '#ffe3b3' },
+  wraith:   { fill: '#2c2140', shade: '#171126', rim: '#b78bff' },
   shard:    { fill: '#7fe7ff', shade: '#3d8fa8', rim: '#e3fbff' },
-  boss:     { fill: '#6e6259', shade: '#40382f', rim: '#b8a88f' },
+  boss:     { fill: '#7d6f61', shade: '#453a30', rim: '#d9c9a8' },
 };
 
 /** Draw one rock's sprite: a jittered polygon with a shaded side and a few craters. */
@@ -66,6 +67,36 @@ function rockSprite(rng, kind, radius) {
   ctx.lineWidth = 1.4;
   ctx.stroke();
   ctx.globalAlpha = 1;
+  if (kind === 'wraith') {
+    // The wraith's heart: a bright violet core that burns through the dark shell,
+    // so the eye finds it instantly among honest grey rocks.
+    const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.62);
+    core.addColorStop(0, 'rgba(240, 230, 255, 0.95)');
+    core.addColorStop(0.35, 'rgba(183, 139, 255, 0.75)');
+    core.addColorStop(1, 'rgba(120, 70, 220, 0)');
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 0.62, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (kind === 'boss') {
+    // The Hollow Moon is hollow the way a drum is hollow: something inside it
+    // glows pale gold through the cracks, and its great craters read at a glance.
+    const heart = ctx.createRadialGradient(cx - radius * 0.12, cy - radius * 0.08, 0, cx, cy, radius * 0.72);
+    heart.addColorStop(0, 'rgba(255, 240, 200, 0.55)');
+    heart.addColorStop(0.4, 'rgba(230, 190, 120, 0.22)');
+    heart.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = heart;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 0.72, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(24, 18, 12, 0.5)';
+    for (const [ox, oy, orr] of [[-0.34, -0.2, 0.21], [0.3, 0.26, 0.26], [0.08, -0.44, 0.15]]) {
+      ctx.beginPath();
+      ctx.arc(cx + ox * radius, cy + oy * radius, orr * radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
   return canvas;
 }
 
@@ -89,6 +120,13 @@ function baseBody(kind, x, y, vx, vy) {
     fireTimer: 0,
     shedTimer: 0,
     orbitAngle: 0,
+    /** Spin Forge charge, 0..1: built while the well holds the body, spent on impact. */
+    charge: 0,
+    /** Seconds of white hit-flash left to draw. */
+    flashT: 0,
+    /** Wraith blink countdown, and the moment the boss entered (for its banner). */
+    blinkTimer: 0,
+    spawnedAt: 0,
   };
 }
 
@@ -98,6 +136,7 @@ export function makeRock(rng, kind, x, y, vx, vy) {
   body.spin = rng.range(-1.1, 1.1);
   body.angle = rng.angle();
   body.sprite = rockSprite(rng, kind, body.radius);
+  if (kind === 'wraith') body.blinkTimer = rng.range(1.2, 2.4);
   return body;
 }
 

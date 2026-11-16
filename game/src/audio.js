@@ -153,6 +153,11 @@ export function createAudio() {
       noise(0.28, 2400, 300, 0.20);
       tone(320, 90, 0.22, 'sine', 0.10);
     },
+    /** The wraith's blink: a quick downward shimmer, felt more than heard. */
+    blink() {
+      tone(1250, 280, 0.13, 'sine', 0.07);
+      tone(1900, 420, 0.09, 'triangle', 0.04, 0.02);
+    },
     shatter(big) {
       noise(big ? 0.34 : 0.2, big ? 900 : 1500, 200, big ? 0.34 : 0.22);
       tone(big ? 180 : 300, 60, big ? 0.3 : 0.18, 'square', 0.10);

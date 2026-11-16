@@ -3,8 +3,8 @@
 // this file turns them into audio and announcements, routes clicks and keys to the
 // screens, keeps the best score, and stages the ?shot= scenes for screenshots.
 //
-// ?seed=N fixes the storm's pattern. ?shot=title|play|shop|end (with &seed=N) stages
-// that scene instead of running the loop, paints it twice and sets __shotReady.
+// ?seed=N fixes the storm's pattern. ?shot=title|play|shop|boss|end (with &seed=N)
+// stages that scene instead of running the loop, paints it twice and sets __shotReady.
 
 import { BEST_KEY, STEP } from './config.js';
 import { createRandom } from './random.js';
@@ -13,7 +13,7 @@ import { createInput } from './input.js';
 import { createAudio } from './audio.js';
 import { createRenderer } from './render.js';
 import { stageShot } from './shots.js';
-import { SHOP_LAYOUT, cardRect, inside } from './upgrades.js';
+import { SHOP_LAYOUT, UPGRADES, cardRect, inside } from './upgrades.js';
 
 /** The longest frame the loop catches up on; a longer stall is dropped, not replayed. */
 const MAX_FRAME = 0.25;
@@ -70,6 +70,7 @@ function playEvents(events) {
   if (events & EV.DRONE_DIE) audio.droneDie();
   if (events & EV.DRONE_SHOT) audio.droneShot();
   if (events & EV.BOSS_ALARM) audio.bossAlarm();
+  if (events & EV.BLINK) audio.blink();
   if (events & EV.WELL_RELEASE) audio.release();
   if (events & EV.WAVE_CLEAR) audio.waveHorn();
   if (events & EV.VICTORY) audio.victory();
@@ -139,7 +140,7 @@ function handleEvent(event, input) {
       audio.click();
     } else if (state.screen === 'shop') {
       let bought = false;
-      for (let i = 0; i < 6; i += 1) {
+      for (let i = 0; i < UPGRADES.length; i += 1) {
         if (inside(cardRect(i), event.x, event.y)) {
           if (world.buy(i)) {
             audio.buy();
@@ -175,7 +176,7 @@ function runGame() {
     ui.shopHover = -1;
     ui.launchHover = false;
     if (world.state.screen === 'shop') {
-      for (let i = 0; i < 6; i += 1) {
+      for (let i = 0; i < UPGRADES.length; i += 1) {
         if (inside(cardRect(i), control.wellX, control.wellY)) ui.shopHover = i;
       }
       ui.launchHover = inside(SHOP_LAYOUT.launch, control.wellX, control.wellY);

@@ -81,7 +81,7 @@ export function createInput(canvas) {
     if (event.code === 'KeyP' || event.code === 'Escape') events.push({ type: 'pause' });
     if (event.code === 'KeyM') events.push({ type: 'mute' });
     if (event.code === 'KeyZ') usingKeyboard = true;
-    if (/^Digit[1-6]$/.test(event.code)) events.push({ type: 'buy', index: Number(event.code.slice(5)) - 1 });
+    if (/^Digit[1-8]$/.test(event.code)) events.push({ type: 'buy', index: Number(event.code.slice(5)) - 1 });
   });
   window.addEventListener('keyup', (event) => held.delete(event.code));
   window.addEventListener('blur', () => {

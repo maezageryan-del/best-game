@@ -106,11 +106,20 @@ export function createParticles(rng) {
       for (const r of rings) {
         const fade = 1 - r.age / r.life;
         ctx.save();
-        ctx.globalAlpha = fade * 0.8;
+        // A shockwave reads as two fronts: a bright thin edge and a soft wash behind it.
+        ctx.globalAlpha = fade * 0.85;
         ctx.strokeStyle = r.color;
-        ctx.lineWidth = 3 + fade * 5;
+        ctx.lineWidth = 2 + fade * 4;
+        ctx.shadowColor = r.color;
+        ctx.shadowBlur = 10;
         ctx.beginPath();
         ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = fade * 0.22;
+        ctx.lineWidth = 10 + fade * 16;
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, Math.max(1, r.radius - 7), 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
@@ -136,9 +145,18 @@ export function createParticles(rng) {
       ctx.font = '700 17px Verdana, Geneva, sans-serif';
       ctx.textAlign = 'center';
       for (const t of texts) {
+        // Score text pops in oversized, settles, then rises and fades — it should
+        // feel like the world is cheering, not like a label.
+        const pop = t.age < 0.16 ? 0.7 + (t.age / 0.16) * 0.42 : 1.12 - Math.min(0.12, (t.age - 0.16) * 0.4);
+        ctx.save();
+        ctx.translate(t.x, t.y);
+        ctx.scale(pop, pop);
         ctx.globalAlpha = Math.max(0, 1 - t.age / t.life);
+        ctx.shadowColor = t.color;
+        ctx.shadowBlur = 9;
         ctx.fillStyle = t.color;
-        ctx.fillText(t.label, t.x, t.y);
+        ctx.fillText(t.label, 0, 0);
+        ctx.restore();
       }
       ctx.restore();
     },

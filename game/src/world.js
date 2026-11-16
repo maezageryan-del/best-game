@@ -4,7 +4,7 @@
 // pixels or sound: step() returns an event mask and the shell turns events into audio
 // and announcements.
 
-import { COLORS, COMBO, KINDS, NOVA, PLANET, VIEW, WAVES, WELL, endlessWave } from './config.js';
+import { COLORS, COMBO, KINDS, NOVA, PLANET, VIEW, WAVES, WELL, WRAITH, endlessWave } from './config.js';
 import { makeBolt, makeBoss, makeDrone, makeDust, makeRock, makeShard, speedOf } from './entities.js';
 import { createParticles } from './particles.js';
 import { UPGRADES, applyUpgrade, canBuy } from './upgrades.js';
@@ -25,11 +25,13 @@ export const EV = {
   WELL_RELEASE: 2048,
   BOSS_HIT: 4096,
   SHARD_BREAK: 8192,
+  BLINK: 16384,
 };
 
 const BURST_COLORS = {
   pebble: '#aeb9cc', splitter: '#c9a7eb', boulder: '#d9b98f',
   comet: '#ffb08a', drone: '#ff8a7a', shard: '#aee9ff', boss: '#d9c9a8',
+  wraith: '#b78bff',
 };
 
 export function createWorld(rng) {
@@ -38,6 +40,9 @@ export function createWorld(rng) {
   const state = {
     screen: 'title',
     time: 0,
+    /** Seconds since the current screen arrived — the renderer's entrance clock. */
+    screenTime: 0,
+    lastScreen: 'title',
     wave: 0,
     waveName: '',
     phase: 'announce',
@@ -53,7 +58,7 @@ export function createWorld(rng) {
     shieldMax: 0,
     novaCharges: NOVA.startCharges,
     nova: null,
-    upgrades: { radius: 0, pull: 0, aegis: 0, repair: 0, nova: 0, moon: 0 },
+    upgrades: { radius: 0, pull: 0, spin: 0, aegis: 0, repair: 0, nova: 0, moon: 0, magnet: 0 },
     bodies: [],
     bolts: [],
     motes: [],
@@ -146,7 +151,7 @@ export function createWorld(rng) {
     state.shieldMax = 0;
     state.novaCharges = NOVA.startCharges;
     state.nova = null;
-    state.upgrades = { radius: 0, pull: 0, aegis: 0, repair: 0, nova: 0, moon: 0 };
+    state.upgrades = { radius: 0, pull: 0, spin: 0, aegis: 0, repair: 0, nova: 0, moon: 0, magnet: 0 };
     state.bodies = [];
     state.bolts = [];
     state.motes = [];
@@ -176,6 +181,7 @@ export function createWorld(rng) {
       state.bodies.push(makeDrone(rng, x, y, vx, vy));
     } else if (kind === 'boss') {
       const boss = makeBoss(rng, PLANET.x + rng.range(-160, 160), -84);
+      boss.spawnedAt = state.time;
       state.bodies.push(boss);
       state.boss = boss;
       for (let i = 0; i < 6; i += 1) {
@@ -198,6 +204,10 @@ export function createWorld(rng) {
     const color = BURST_COLORS[body.kind] ?? '#ffffff';
     particles.burst(body.x, body.y, color, body.kind === 'boss' ? 90 : 10 + body.radius, body.kind === 'boss' ? 420 : 240);
     particles.flash(body.x, body.y, body.radius * 1.5, color);
+    // Heavy things die with a shockwave the eye can follow across the field.
+    if (body.kind === 'boulder' || body.kind === 'boss' || body.kind === 'splitter' || body.kind === 'wraith') {
+      particles.ring(body.x, body.y, body.radius * (body.kind === 'boss' ? 2.6 : 3.4), color);
+    }
     if (body.kind === 'splitter') {
       for (let i = 0; i < 3; i += 1) {
         const a = rng.angle();
@@ -251,13 +261,15 @@ export function createWorld(rng) {
       events |= EV.PLANET_HIT;
       state.flashRed = 1;
       state.shake = Math.max(state.shake, 9);
+      particles.ring(PLANET.x, PLANET.y, PLANET.radius + 30, COLORS.danger);
     }
     return events;
   }
 
-  /** Damage from a hot body striking at `speed`: 1, plus 1 per full 200 px/s over the threshold. */
-  function impactDamage(speed) {
-    return Math.min(3, 1 + Math.floor((speed - WELL.weaponSpeed) / 200));
+  /** Damage from a hot body striking at `speed`: 1, plus 1 per full 200 px/s over the
+   *  threshold — and +1 more when the Spin Forge has charged the striker past 70%. */
+  function impactDamage(speed, charge = 0) {
+    return Math.min(4, 1 + Math.floor((speed - WELL.weaponSpeed) / 200) + (charge >= 0.7 ? 1 : 0));
   }
 
   /** Separate two overlapping bodies and bounce them apart along their centre line. */
@@ -301,7 +313,8 @@ export function createWorld(rng) {
       const other = shard === a ? b : a;
       if (other.kind === 'boss' || other.kind === 'shard') return 0;
       if (other.hot) {
-        shard.hp -= impactDamage(speedOf(other));
+        shard.hp -= impactDamage(speedOf(other), other.charge);
+        shard.flashT = 0.09;
         events |= kill(other, false);
         if (shard.hp <= 0) events |= kill(shard, true);
       } else {
@@ -320,10 +333,12 @@ export function createWorld(rng) {
       const boss = a.kind === 'boss' ? a : b;
       const other = boss === a ? b : a;
       if (other.hot) {
-        boss.hp -= impactDamage(speedOf(other));
+        boss.hp -= impactDamage(speedOf(other), other.charge);
+        boss.flashT = 0.09;
         events |= EV.BOSS_HIT;
         events |= kill(other, false);
         particles.burst(other.x, other.y, '#ffe9b3', 14, 300);
+        particles.ring(other.x, other.y, 54, '#ffe9b3');
         if (boss.hp <= 0) events |= kill(boss, true);
       } else {
         bounce(boss, other);
@@ -335,7 +350,9 @@ export function createWorld(rng) {
     if (a.hot || b.hot) {
       const attacker = a.hot ? a : b;
       const victim = attacker === a ? b : a;
-      victim.hp -= impactDamage(speedOf(attacker));
+      victim.hp -= impactDamage(speedOf(attacker), attacker.charge);
+      victim.flashT = 0.09;
+      attacker.charge = 0;
       attacker.vx *= 0.55;
       attacker.vy *= 0.55;
       particles.burst(victim.x, victim.y, '#ffffff', 5, 180);
@@ -346,6 +363,8 @@ export function createWorld(rng) {
       const damage = relSpeed > 400 ? 2 : 1;
       a.hp -= damage;
       b.hp -= damage;
+      a.flashT = 0.07;
+      b.flashT = 0.07;
       bounce(a, b);
       if (a.hp <= 0) events |= kill(a, true);
       if (b.hp <= 0) events |= kill(b, true);
@@ -355,20 +374,25 @@ export function createWorld(rng) {
     return events;
   }
 
-  /** Stardust motes drift home to the planet and pay out on arrival. */
+  /** Stardust motes drift home to the planet and pay out on arrival.
+   *  The Stardust Magnet pulls harder, lets them fly faster, keeps them alive longer. */
   function updateMotes(dt) {
     let events = 0;
+    const magnet = state.upgrades.magnet;
+    const pull = 520 + 320 * magnet;
+    const cap = 330 + 130 * magnet;
+    const maxAge = 6 + 5 * magnet;
     for (const mote of state.motes) {
       mote.age += dt;
       const dx = PLANET.x - mote.x;
       const dy = PLANET.y - mote.y;
       const dist = Math.max(1, Math.hypot(dx, dy));
-      mote.vx += (dx / dist) * 520 * dt;
-      mote.vy += (dy / dist) * 520 * dt;
+      mote.vx += (dx / dist) * pull * dt;
+      mote.vy += (dy / dist) * pull * dt;
       const speed = Math.hypot(mote.vx, mote.vy);
-      if (speed > 330) {
-        mote.vx = (mote.vx / speed) * 330;
-        mote.vy = (mote.vy / speed) * 330;
+      if (speed > cap) {
+        mote.vx = (mote.vx / speed) * cap;
+        mote.vy = (mote.vy / speed) * cap;
       }
       mote.x += mote.vx * dt;
       mote.y += mote.vy * dt;
@@ -379,7 +403,7 @@ export function createWorld(rng) {
         events |= EV.PICKUP;
       }
     }
-    state.motes = state.motes.filter((m) => !m.dead && m.age < 6);
+    state.motes = state.motes.filter((m) => !m.dead && m.age < maxAge);
     return events;
   }
 
@@ -387,6 +411,12 @@ export function createWorld(rng) {
   function step(dt, control) {
     let events = 0;
     state.time += dt;
+    if (state.screen !== state.lastScreen) {
+      state.lastScreen = state.screen;
+      state.screenTime = 0;
+    } else {
+      state.screenTime += dt;
+    }
     for (const rock of state.ambient) {
       rock.angle += rock.speed * dt;
       rock.rot += rock.spin * dt;
@@ -430,6 +460,7 @@ export function createWorld(rng) {
 
     for (const body of state.bodies) {
       if (body.dead) continue;
+      if (body.flashT > 0) body.flashT = Math.max(0, body.flashT - dt);
       if (body.kind === 'shard') {
         const boss = body.boss;
         if (!boss || boss.dead) {
@@ -483,11 +514,44 @@ export function createWorld(rng) {
           body.vx += (-dy / dist) * accel * WELL.swirlShare * dt;
           body.vy += (dx / dist) * accel * WELL.swirlShare * dt;
           body.inWell = true;
+          // The Spin Forge: a held body drinks the swirl and charges — the longer
+          // the well holds it, the harder its eventual strike lands.
+          if (state.upgrades.spin > 0) {
+            body.charge = Math.min(1, body.charge + dt * (0.34 + 0.22 * state.upgrades.spin));
+            const spinBoost = body.charge * 130 * state.upgrades.spin;
+            body.vx += (-dy / dist) * spinBoost * dt;
+            body.vy += (dx / dist) * spinBoost * dt;
+          }
         } else {
           body.inWell = false;
         }
       } else {
         body.inWell = false;
+      }
+      if (!body.inWell && body.charge > 0) {
+        body.charge = Math.max(0, body.charge - dt * 0.12);
+      }
+
+      // The wraith blinks: every few seconds it skips a hop closer to the world,
+      // leaving a violet afterimage hanging where it was.
+      if (body.kind === 'wraith') {
+        body.blinkTimer -= dt;
+        if (body.blinkTimer <= 0) {
+          body.blinkTimer = WRAITH.blinkEvery * rng.range(0.85, 1.2);
+          const dx = PLANET.x - body.x;
+          const dy = PLANET.y - body.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > WRAITH.blinkMinDist) {
+            particles.flash(body.x, body.y, body.radius * 2.1, BURST_COLORS.wraith);
+            particles.ring(body.x, body.y, body.radius * 2.6, BURST_COLORS.wraith);
+            const hop = Math.min(WRAITH.blinkHop, dist - WRAITH.blinkMinDist + 40);
+            body.x += (dx / dist) * hop;
+            body.y += (dy / dist) * hop;
+            body.flashT = 0.14;
+            particles.flash(body.x, body.y, body.radius * 1.7, BURST_COLORS.wraith);
+            events |= EV.BLINK;
+          }
+        }
       }
 
       if (body.kind === 'drone') {
@@ -522,6 +586,12 @@ export function createWorld(rng) {
       }
       body.angle += body.spin * dt;
       body.hot = speedOf(body) > WELL.weaponSpeed;
+      // A weaponised rock sheds sparks as it flies — speed you can see.
+      if (body.hot && rng.chance(0.45)) {
+        particles.spark(body.x, body.y,
+          -body.vx * 0.08 + rng.range(-24, 24), -body.vy * 0.08 + rng.range(-24, 24),
+          body.kind === 'comet' ? '#ffb08a' : '#cfe9ff', rng.range(0.18, 0.34), rng.range(1.4, 2.6));
+      }
       if (body.inWell) {
         body.counted = false;
       } else if (body.hot && !body.counted) {
@@ -529,7 +599,7 @@ export function createWorld(rng) {
         state.stats.flung += 1;
       }
       body.trail.push({ x: body.x, y: body.y });
-      if (body.trail.length > 12) body.trail.shift();
+      if (body.trail.length > 20) body.trail.shift();
     }
 
     // Shepherd moons smash what they touch.
@@ -554,6 +624,7 @@ export function createWorld(rng) {
             if (!state.nova.bossHit) {
               state.nova.bossHit = true;
               body.hp -= 2;
+              body.flashT = 0.12;
               events |= EV.BOSS_HIT;
               if (body.hp <= 0) events |= kill(body, true);
             }
@@ -713,6 +784,7 @@ export function createWorld(rng) {
       state.bodies.push(makeDrone(rng, x, y, vx, vy));
     } else if (kind === 'boss') {
       const boss = makeBoss(rng, x, y);
+      boss.spawnedAt = state.time;
       state.bodies.push(boss);
       state.boss = boss;
       for (let i = 0; i < 6; i += 1) {

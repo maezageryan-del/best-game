@@ -1,14 +1,15 @@
-// Upgrades: what stardust buys between waves. Six lines of growth — the well, the
-// planet's shield and repairs, the nova, and the shepherd moons — each with a cost
-// that grows per level bought. This file owns the shop's card layout too, so the
-// renderer and the click handler can never disagree about where a card is.
+// Upgrades: what stardust buys between waves. Eight lines of growth — the well and
+// its Spin Forge, the planet's shield and repairs, the nova, the shepherd moons and
+// the Stardust Magnet — each with a cost that grows per level bought. This file owns
+// the shop's card layout too, so the renderer and the click handler can never
+// disagree about where a card is.
 
 import { NOVA, PLANET, WELL } from './config.js';
 
 export const UPGRADES = [
   {
     id: 'radius', name: 'Wider Well', max: 5, baseCost: 14, growth: 1.55,
-    blurb: (lvl) => `Well reach ${Math.round(WELL.baseRadius + WELL.radiusPerLevel * (lvl + 1))} px`,
+    blurb: (lvl) => `Well reach grows to ${Math.round(WELL.baseRadius + WELL.radiusPerLevel * (lvl + 1))} px`,
     now: (lvl) => `now ${Math.round(WELL.baseRadius + WELL.radiusPerLevel * lvl)} px`,
   },
   {
@@ -17,9 +18,14 @@ export const UPGRADES = [
     now: (lvl) => `now x${(WELL.pullPerLevel ** lvl).toFixed(2)}`,
   },
   {
+    id: 'spin', name: 'Spin Forge', max: 3, baseCost: 18, growth: 1.7,
+    blurb: () => 'Held rocks charge up; a charged strike hits +1 harder',
+    now: (lvl) => (lvl === 0 ? 'the well does not forge yet' : `forge level ${lvl}`),
+  },
+  {
     id: 'aegis', name: 'Aegis Shield', max: 3, baseCost: 18, growth: 1.7,
     blurb: (lvl) => `+34 shield over the planet (${(lvl + 1) * 34} total)`,
-    now: (lvl) => lvl === 0 ? 'no shield yet' : `${lvl * 34} shield`,
+    now: (lvl) => (lvl === 0 ? 'no shield yet' : `${lvl * 34} shield`),
   },
   {
     id: 'repair', name: 'Repair the World', max: 99, baseCost: 12, growth: 1.35,
@@ -33,8 +39,13 @@ export const UPGRADES = [
   },
   {
     id: 'moon', name: 'Shepherd Moon', max: 2, baseCost: 22, growth: 1.8,
-    blurb: (lvl) => (lvl === 0 ? 'A moon orbits the planet, smashing rocks it meets' : 'A second moon, opposite the first'),
+    blurb: (lvl) => (lvl === 0 ? 'A moon orbits the world, smashing what it meets' : 'A second moon, opposite the first'),
     now: (lvl) => (lvl === 0 ? 'no moon yet' : lvl === 1 ? 'one moon' : 'twin moons'),
+  },
+  {
+    id: 'magnet', name: 'Stardust Magnet', max: 3, baseCost: 12, growth: 1.6,
+    blurb: () => 'Stardust flies home faster and lingers longer',
+    now: (lvl) => (lvl === 0 ? 'dust drifts as it will' : `magnet level ${lvl}`),
   },
 ];
 
@@ -68,22 +79,22 @@ export function applyUpgrade(state, upgrade) {
   }
 }
 
-/** Shop geometry: the panel, the six cards in two rows of three, and the launch button. */
+/** Shop geometry: the panel, the eight cards in two rows of four, and the launch button. */
 export const SHOP_LAYOUT = {
-  panel: { x: 190, y: 128, w: 900, h: 560 },
-  cardW: 272,
-  cardH: 168,
-  gapX: 26,
-  gapY: 22,
-  cardsX: 228,
-  cardsY: 238,
-  launch: { x: 490, y: 606, w: 300, h: 54 },
+  panel: { x: 150, y: 112, w: 980, h: 596 },
+  cardW: 224,
+  cardH: 198,
+  gapX: 20,
+  gapY: 20,
+  cardsX: 162,
+  cardsY: 224,
+  launch: { x: 490, y: 652, w: 300, h: 44 },
 };
 
-/** The rectangle of card `index` (0-5, matching UPGRADES order). */
+/** The rectangle of card `index` (0-7, matching UPGRADES order). */
 export function cardRect(index) {
-  const col = index % 3;
-  const row = Math.floor(index / 3);
+  const col = index % 4;
+  const row = Math.floor(index / 4);
   return {
     x: SHOP_LAYOUT.cardsX + col * (SHOP_LAYOUT.cardW + SHOP_LAYOUT.gapX),
     y: SHOP_LAYOUT.cardsY + row * (SHOP_LAYOUT.cardH + SHOP_LAYOUT.gapY),

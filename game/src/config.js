@@ -35,9 +35,14 @@ export const KINDS = {
   boulder:  { radius: 30, hp: 4, planetDamage: 14, score: 30, dust: 3, speedMin: 38,  speedMax: 58 },
   comet:    { radius: 12, hp: 1, planetDamage: 10, score: 15, dust: 2, speedMin: 250, speedMax: 330 },
   drone:    { radius: 17, hp: 2, planetDamage: 8,  score: 40, dust: 3, speedMin: 120, speedMax: 150 },
+  wraith:   { radius: 15, hp: 2, planetDamage: 9,  score: 35, dust: 2, speedMin: 66,  speedMax: 96 },
   shard:    { radius: 16, hp: 2, planetDamage: 0,  score: 25, dust: 1, speedMin: 0,   speedMax: 0 },
   boss:     { radius: 64, hp: 26, planetDamage: 0, score: 500, dust: 12, speedMin: 7,  speedMax: 7 },
 };
+
+/** The wraith: a dark rock with a violet heart that blinks toward the world,
+ *  skipping a short hop closer every few seconds and shedding afterimages. */
+export const WRAITH = { blinkEvery: 2.3, blinkHop: 118, blinkMinDist: 150 };
 
 /** Combo: kills chained inside the window raise the score multiplier, to a cap. */
 export const COMBO = { windowSec: 2.6, killsPerStep: 4, maxMult: 5 };
@@ -54,6 +59,9 @@ export const COLORS = {
   planetDark: '#0f5f52',
   well: '#57e6ff',
   wellSoft: 'rgba(87, 230, 255, 0.16)',
+  wraith: '#b78bff',
+  wraithCore: '#e9dcff',
+  horizon: '#aef3ff',
   danger: '#ff6a5e',
   dust: '#ffd166',
   ink: '#eaf6ff',
@@ -100,6 +108,7 @@ export const WAVES = [
     { kind: 'boulder', count: 5, gap: 2.8, delay: 0.5 },
     { kind: 'splitter', count: 5, gap: 2.4, delay: 1.5 },
     { kind: 'comet', count: 4, gap: 2.0, delay: 6.0 },
+    { kind: 'wraith', count: 2, gap: 4.5, delay: 8.0 },
   ] },
   { name: 'Crossfire', spawns: [
     { kind: 'drone', count: 3, gap: 5.0, delay: 1.0 },
@@ -110,17 +119,20 @@ export const WAVES = [
     { kind: 'boulder', count: 6, gap: 2.4, delay: 0.5 },
     { kind: 'drone', count: 2, gap: 7.0, delay: 3.0 },
     { kind: 'splitter', count: 4, gap: 2.6, delay: 5.0 },
+    { kind: 'wraith', count: 3, gap: 3.8, delay: 6.5 },
   ] },
   { name: 'The Storm Wall', spawns: [
     { kind: 'pebble', count: 12, gap: 0.9, delay: 0.5 },
     { kind: 'comet', count: 7, gap: 1.3, delay: 2.0 },
     { kind: 'drone', count: 3, gap: 5.5, delay: 4.0 },
     { kind: 'boulder', count: 4, gap: 3.0, delay: 7.0 },
+    { kind: 'wraith', count: 3, gap: 3.4, delay: 9.0 },
   ] },
   { name: 'The Hollow Moon', boss: true, spawns: [
     { kind: 'boss', count: 1, gap: 1, delay: 1.0 },
     { kind: 'pebble', count: 6, gap: 2.4, delay: 4.0 },
     { kind: 'comet', count: 4, gap: 2.6, delay: 9.0 },
+    { kind: 'wraith', count: 2, gap: 5.0, delay: 12.0 },
   ] },
 ];
 
@@ -133,6 +145,7 @@ export function endlessWave(number) {
     { kind: 'comet', count: 3 + Math.floor(tier / 2), gap: 1.8, delay: 4.0 },
     { kind: 'drone', count: Math.min(4, 1 + Math.floor(tier / 2)), gap: 6.0, delay: 5.0 },
     { kind: 'splitter', count: 3 + Math.floor(tier / 3), gap: 2.6, delay: 6.0 },
+    { kind: 'wraith', count: 2 + Math.floor(tier / 2), gap: 3.6, delay: 7.0 },
   ];
   if (number % 5 === 0) spawns.unshift({ kind: 'boss', count: 1, gap: 1, delay: 1.0 });
   return { name: `Endless ${tier}`, boss: number % 5 === 0, spawns };
