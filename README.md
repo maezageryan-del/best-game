@@ -4,7 +4,7 @@
 
 An original gravity-action game for make.fun's *best-game-01* bounty. Your planet sits
 at the heart of the field and the storm is coming for it — shattered rock, comets,
-hunter drones, and at last the Hollow Moon. You have no gun. You have **gravity**.
+hunter drones, ice lancers, and at last the Hollow Moon. You have no gun. You have **gravity**.
 
 Hold the mouse to project a gravity well: rocks bend, spiral and orbit it — and now
 you can *see* the field itself, its rings compressed and its spokes bent by the
@@ -33,18 +33,24 @@ mode keeps the storm coming, thicker every time.
 
 ## What's in the game
 
-- Six hostile kinds with distinct behaviours — drifting **pebbles**, tough
+- Seven hostile kinds with distinct behaviours — drifting **pebbles**, tough
   **boulders**, **splitters** that burst into pebbles, fast aimed **comets**,
-  **drones** that orbit and shoot, and **wraiths**: dark rocks with a violet heart
-  that blink toward the world every few seconds, skipping past your guard — plus a
-  boss, the **Hollow Moon**, behind six orbiting shield shards, shedding rocks as
-  it bears down on the planet, announced by a banner and tracked by its own
-  health bar.
+  **drones** that orbit and shoot, **wraiths**: dark rocks with a violet heart
+  that blink toward the world every few seconds, skipping past your guard — and
+  **lancers**: spears of black ice that cruise slowly, hang still while a dashed
+  line of intent settles on the world, then dash at weapon speed, shattering
+  what they cross — plus a boss, the **Hollow Moon**, behind six orbiting shield
+  shards, shedding rocks as it bears down on the planet, announced by a banner
+  and tracked by its own health bar. At half health the Moon **eclipses**: the
+  sky turns crimson under a black sun, its shards quicken, it sheds splitters
+  and throws three-rock volleys straight at the world.
 - Real orbital physics: a swirling well with a visible warped field, slingshot
   releases, weaponised velocity, grinding collisions, combo scoring, Spin Forge
-  charge that builds while the well holds a rock and lands as bonus damage, and a
-  nova with a travelling shockwave. Heavy kills answer with shockwave rings;
-  impacts flash; slung rocks stream glowing ribbons and shed sparks.
+  charge that builds while the well holds a rock and lands as bonus damage, and
+  a nova whose travelling wavefront is drawn as it crosses the field, throwing
+  sparks. Heavy kills land with **hit-stop** — the storm freezes for a breath
+  while three layers of debris (white sparks, coloured wreckage, hanging embers)
+  bloom — and the camera shakes; slung rocks stream glowing ribbons.
 - An eight-line upgrade economy between waves, persistent best score, synthesized
   WebAudio sound effects and ambient music (no audio files), and fully procedural
   art (no image files): every rock's sprite is generated, seeded, and unique, the
@@ -57,13 +63,14 @@ mode keeps the storm coming, thicker every time.
   loads `src/main.js`; each file in `src/` has one job — `config` (the numbers and
   the twelve waves), `world` (the simulation), `render` (all drawing), `entities`,
   `particles`, `audio`, `input`, `upgrades`, `random`, and `shots` (the deterministic
-  scenes behind the screenshots, staged with `?shot=title|play|shop|boss|end&seed=N`).
+  scenes behind the screenshots, staged with `?shot=title|play|shop|boss|end|nova|lancer|boss2&seed=N`).
 - `main.ts` — the hand-in program: copies `game/` and `screenshots/` to the output
   directory and writes `dossier.json` with the vendored `buildDossier`.
 - `serve.ts` — a tiny local server: `node serve.ts` plays the game at
   http://localhost:8080.
-- `screenshots/` — four real renders of the game (title, mid-fight, shop, and the
-  Hollow Moon boss fight), taken from the staged scenes listed in `shots.json`.
+- `screenshots/` — four real renders of the game (the title, a nova caught
+  mid-crossing, a lancer's telegraphed dash, and the Hollow Moon eclipsed in its
+  second phase), taken from the staged scenes listed in `shots.json`.
 - `vendor/makefun-game.ts` — the kit's dossier library, unchanged.
 
 ## Running it

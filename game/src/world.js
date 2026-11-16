@@ -4,8 +4,8 @@
 // pixels or sound: step() returns an event mask and the shell turns events into audio
 // and announcements.
 
-import { COLORS, COMBO, KINDS, NOVA, PLANET, VIEW, WAVES, WELL, WRAITH, endlessWave } from './config.js';
-import { makeBolt, makeBoss, makeDrone, makeDust, makeRock, makeShard, speedOf } from './entities.js';
+import { BOSS_PHASE2, COLORS, COMBO, KINDS, LANCER, NOVA, PLANET, VIEW, WAVES, WELL, WRAITH, endlessWave } from './config.js';
+import { makeBolt, makeBoss, makeDrone, makeDust, makeLancer, makeRock, makeShard, speedOf } from './entities.js';
 import { createParticles } from './particles.js';
 import { UPGRADES, applyUpgrade, canBuy } from './upgrades.js';
 
@@ -26,12 +26,14 @@ export const EV = {
   BOSS_HIT: 4096,
   SHARD_BREAK: 8192,
   BLINK: 16384,
+  LANCER_DASH: 32768,
+  BOSS_PHASE: 65536,
 };
 
 const BURST_COLORS = {
   pebble: '#aeb9cc', splitter: '#c9a7eb', boulder: '#d9b98f',
   comet: '#ffb08a', drone: '#ff8a7a', shard: '#aee9ff', boss: '#d9c9a8',
-  wraith: '#b78bff',
+  wraith: '#b78bff', lancer: '#aef3ff',
 };
 
 export function createWorld(rng) {
@@ -70,6 +72,10 @@ export function createWorld(rng) {
     wasEngaged: false,
     shake: 0,
     flashRed: 0,
+    /** Hit-stop: seconds of frozen storm left after a heavy kill. */
+    hitStop: 0,
+    /** The sky's mood: 'void' normally, 'eclipse' once the Moon turns. */
+    biome: 'void',
     hint: 0,
     endless: false,
     stats: { shattered: 0, flung: 0, taken: 0 },
@@ -137,6 +143,7 @@ export function createWorld(rng) {
     state.phaseTimer = 2.4;
     state.waveTime = 0;
     state.boss = null;
+    state.biome = 'void';
     if (number === 1) state.hint = 7;
   }
 
@@ -151,6 +158,8 @@ export function createWorld(rng) {
     state.shieldMax = 0;
     state.novaCharges = NOVA.startCharges;
     state.nova = null;
+    state.hitStop = 0;
+    state.biome = 'void';
     state.upgrades = { radius: 0, pull: 0, spin: 0, aegis: 0, repair: 0, nova: 0, moon: 0, magnet: 0 };
     state.bodies = [];
     state.bolts = [];
@@ -179,6 +188,8 @@ export function createWorld(rng) {
     const vy = Math.sin(aim) * speed;
     if (kind === 'drone') {
       state.bodies.push(makeDrone(rng, x, y, vx, vy));
+    } else if (kind === 'lancer') {
+      state.bodies.push(makeLancer(rng, x, y, vx, vy));
     } else if (kind === 'boss') {
       const boss = makeBoss(rng, PLANET.x + rng.range(-160, 160), -84);
       boss.spawnedAt = state.time;
@@ -202,11 +213,19 @@ export function createWorld(rng) {
     body.dead = true;
     let events = EV.SHATTER;
     const color = BURST_COLORS[body.kind] ?? '#ffffff';
-    particles.burst(body.x, body.y, color, body.kind === 'boss' ? 90 : 10 + body.radius, body.kind === 'boss' ? 420 : 240);
+    // Every shatter is layered now: white sparks, coloured debris, hanging embers.
+    particles.burstRich(body.x, body.y, color, body.kind === 'boss' ? 3.2 : 0.7 + body.radius / 26);
     particles.flash(body.x, body.y, body.radius * 1.5, color);
     // Heavy things die with a shockwave the eye can follow across the field.
-    if (body.kind === 'boulder' || body.kind === 'boss' || body.kind === 'splitter' || body.kind === 'wraith') {
+    if (body.kind === 'boulder' || body.kind === 'boss' || body.kind === 'splitter' || body.kind === 'wraith' || body.kind === 'lancer') {
       particles.ring(body.x, body.y, body.radius * (body.kind === 'boss' ? 2.6 : 3.4), color);
+    }
+    // A heavy kill stops the storm for a breath and knocks the camera: the pause
+    // is what makes the debris field read as an explosion instead of a dissolve.
+    if (scored && (body.kind === 'boulder' || body.kind === 'boss' || body.kind === 'splitter'
+      || body.kind === 'wraith' || body.kind === 'lancer' || body.kind === 'shard')) {
+      state.hitStop = Math.max(state.hitStop, body.kind === 'boss' ? 0.085 : 0.045);
+      state.shake = Math.max(state.shake, body.kind === 'boss' ? 16 : 5);
     }
     if (body.kind === 'splitter') {
       for (let i = 0; i < 3; i += 1) {
@@ -243,6 +262,26 @@ export function createWorld(rng) {
       state.shake = Math.max(state.shake, 16);
     }
     return events;
+  }
+
+  /**
+   * The Moon's eclipse: the moment its health crosses half, the boss turns. The
+   * sky darkens (the renderer reads state.biome), its shards quicken, it sheds
+   * splitters and starts throwing volleys — all driven from the step code by the
+   * phase flag this sets. Returns the phase event the first time it happens.
+   */
+  function bossPhaseCheck(boss) {
+    if (!boss || boss.dead || boss.phase !== 1) return 0;
+    if (boss.hp > boss.maxHp / 2) return 0;
+    boss.phase = 2;
+    boss.volleyTimer = 2.2;
+    state.biome = 'eclipse';
+    state.shake = Math.max(state.shake, 13);
+    particles.ring(boss.x, boss.y, boss.radius * 3.6, COLORS.eclipse);
+    particles.burstRich(boss.x, boss.y, '#ff9a7a', 1.8);
+    particles.flash(boss.x, boss.y, boss.radius * 2.2, COLORS.eclipse);
+    particles.text(boss.x, boss.y - boss.radius - 46, 'THE MOON ECLIPSES', COLORS.eclipse);
+    return EV.BOSS_PHASE;
   }
 
   /** Damage the planet through (or into) its shield. */
@@ -340,6 +379,7 @@ export function createWorld(rng) {
         particles.burst(other.x, other.y, '#ffe9b3', 14, 300);
         particles.ring(other.x, other.y, 54, '#ffe9b3');
         if (boss.hp <= 0) events |= kill(boss, true);
+        else events |= bossPhaseCheck(boss);
       } else {
         bounce(boss, other);
       }
@@ -407,6 +447,37 @@ export function createWorld(rng) {
     return events;
   }
 
+  /**
+   * The end of a play step: the world's fall, or the wave's end and what follows
+   * it. It runs even on a hit-stop frame, so a kill that clears the field is
+   * never left hanging by the freeze it caused.
+   */
+  function finishStep(events) {
+    if (state.planetHp <= 0) {
+      state.planetHp = 0;
+      state.screen = 'over';
+      state.shake = 18;
+      particles.burst(PLANET.x, PLANET.y, COLORS.planetMid, 110, 460);
+      particles.burst(PLANET.x, PLANET.y, COLORS.danger, 70, 380);
+      particles.flash(PLANET.x, PLANET.y, 130, '#ffffff');
+      return events | EV.GAME_OVER;
+    }
+    if (state.phase === 'active' && state.spawnQueue.length === 0 && state.bodies.length === 0) {
+      const bonus = 50 + 25 * state.wave;
+      state.score += bonus;
+      state.dust += 4;
+      particles.text(PLANET.x, PLANET.y - 90, `WAVE ${state.wave} CLEAR  +${bonus}`, COLORS.ink);
+      events |= EV.WAVE_CLEAR;
+      if (state.wave >= WAVES.length && !state.endless) {
+        state.screen = 'win';
+        events |= EV.VICTORY;
+      } else {
+        state.screen = 'shop';
+      }
+    }
+    return events;
+  }
+
   /** Advance the whole world by one fixed step. Returns the event mask. */
   function step(dt, control) {
     let events = 0;
@@ -455,6 +526,15 @@ export function createWorld(rng) {
       }
     }
 
+    // Hit-stop: for a breath after a heavy kill the storm holds still and only
+    // the debris (updated above) keeps moving. The freeze is what makes an
+    // impact read as an impact; finishStep still runs so clears never hang.
+    if (state.hitStop > 0) {
+      state.hitStop -= dt;
+      state.bodies = state.bodies.filter((b) => !b.dead);
+      return finishStep(events);
+    }
+
     const radius = wellRadius();
     const pull = wellPull();
 
@@ -467,7 +547,8 @@ export function createWorld(rng) {
           body.dead = true;
           continue;
         }
-        const a = state.time * 0.9 + (body.orbitIndex / body.orbitTotal) * Math.PI * 2;
+        const rate = boss.phase === 2 ? BOSS_PHASE2.shardRate : 0.9;
+        const a = state.time * rate + (body.orbitIndex / body.orbitTotal) * Math.PI * 2;
         body.x = boss.x + Math.cos(a) * (boss.radius + 30);
         body.y = boss.y + Math.sin(a) * (boss.radius + 30);
         body.angle += dt * 1.4;
@@ -477,16 +558,39 @@ export function createWorld(rng) {
         const dx = PLANET.x - body.x;
         const dy = PLANET.y - body.y;
         const dist = Math.max(1, Math.hypot(dx, dy));
-        body.x += (dx / dist) * KINDS.boss.speedMin * dt;
-        body.y += (dy / dist) * KINDS.boss.speedMin * dt;
+        const crawl = body.phase === 2 ? BOSS_PHASE2.speed : KINDS.boss.speedMin;
+        body.x += (dx / dist) * crawl * dt;
+        body.y += (dy / dist) * crawl * dt;
         body.angle += dt * 0.12;
         body.shedTimer -= dt;
         if (body.shedTimer <= 0 && state.bodies.length < 42) {
-          body.shedTimer = 5.5;
+          body.shedTimer = body.phase === 2 ? BOSS_PHASE2.shedEvery : 5.5;
+          body.shedCount += 1;
+          // In eclipse the Moon sheds splitters every other time: its children
+          // arrive already dangerous, not as ballast.
+          const kind = body.phase === 2 && body.shedCount % 2 === 0 ? 'splitter' : 'pebble';
           const a = rng.angle();
-          const child = makeRock(rng, 'pebble', body.x + Math.cos(a) * (body.radius + 18), body.y + Math.sin(a) * (body.radius + 18),
+          const child = makeRock(rng, kind, body.x + Math.cos(a) * (body.radius + 18), body.y + Math.sin(a) * (body.radius + 18),
             (dx / dist) * 60 + Math.cos(a) * 40, (dy / dist) * 60 + Math.sin(a) * 40);
           state.bodies.push(child);
+        }
+        // The eclipse volley: three rocks thrown straight at the world, spread
+        // just wide enough that one well cannot catch them all.
+        if (body.phase === 2) {
+          body.volleyTimer -= dt;
+          if (body.volleyTimer <= 0 && state.bodies.length < 42) {
+            body.volleyTimer = BOSS_PHASE2.volleyEvery;
+            const aim = Math.atan2(dy, dx);
+            for (const off of [-0.16, 0, 0.16]) {
+              const child = makeRock(rng, 'pebble',
+                body.x + Math.cos(aim + off) * (body.radius + 16),
+                body.y + Math.sin(aim + off) * (body.radius + 16),
+                Math.cos(aim + off) * BOSS_PHASE2.volleySpeed,
+                Math.sin(aim + off) * BOSS_PHASE2.volleySpeed);
+              state.bodies.push(child);
+            }
+            particles.flash(body.x, body.y, body.radius * 1.4, COLORS.eclipse);
+          }
         }
         // The well can barely nudge the Moon — but barely is not nothing.
         if (state.engaged) {
@@ -554,6 +658,52 @@ export function createWorld(rng) {
         }
       }
 
+      // The lancer: cruise, windup, dash. In the windup it hangs nearly still
+      // while its aim settles on the world (the renderer draws the telegraph);
+      // the dash is a straight line at weapon speed, so a dashing lancer is
+      // itself hot — it shatters what it crosses and breaks on what it meets.
+      if (body.kind === 'lancer') {
+        const dx = PLANET.x - body.x;
+        const dy = PLANET.y - body.y;
+        const dist = Math.max(1, Math.hypot(dx, dy));
+        if (body.dashState === 'cruise') {
+          body.dashTimer -= dt;
+          if (body.dashTimer <= 0) {
+            if (dist > LANCER.minRange) {
+              body.dashState = 'windup';
+              body.dashT = LANCER.windup;
+              body.aimX = dx / dist;
+              body.aimY = dy / dist;
+            } else {
+              body.dashTimer = 0.4;
+            }
+          }
+        } else if (body.dashState === 'windup') {
+          body.aimX = dx / dist;
+          body.aimY = dy / dist;
+          body.vx *= Math.max(0, 1 - 6 * dt);
+          body.vy *= Math.max(0, 1 - 6 * dt);
+          body.dashT -= dt;
+          if (body.dashT <= 0) {
+            body.dashState = 'dash';
+            body.dashT = LANCER.dashTime;
+            body.vx = body.aimX * LANCER.dashSpeed;
+            body.vy = body.aimY * LANCER.dashSpeed;
+            particles.flash(body.x, body.y, body.radius * 1.9, BURST_COLORS.lancer);
+            events |= EV.LANCER_DASH;
+          }
+        } else if (body.dashState === 'dash') {
+          body.dashT -= dt;
+          if (body.dashT <= 0) {
+            body.dashState = 'cruise';
+            body.dashTimer = rng.range(LANCER.cycleMin, LANCER.cycleMax);
+            body.vx *= 0.22;
+            body.vy *= 0.22;
+          }
+        }
+        body.angle = Math.atan2(body.vy, body.vx);
+      }
+
       if (body.kind === 'drone') {
         const dx = PLANET.x - body.x;
         const dy = PLANET.y - body.y;
@@ -616,6 +766,13 @@ export function createWorld(rng) {
     if (state.nova) {
       state.nova.radius += NOVA.speed * dt;
       const r = state.nova.radius;
+      // The front throws off sparks as it crosses the field — speed you can see,
+      // scattered along the ring the renderer draws from this same radius.
+      for (let i = 0; i < 3; i += 1) {
+        const a = rng.angle();
+        particles.spark(PLANET.x + Math.cos(a) * r, PLANET.y + Math.sin(a) * r,
+          Math.cos(a) * 70, Math.sin(a) * 70, '#bff2ff', rng.range(0.25, 0.5), rng.range(1.6, 3));
+      }
       for (const body of state.bodies) {
         if (body.dead || body.kind === 'shard') continue;
         const dist = Math.hypot(body.x - PLANET.x, body.y - PLANET.y);
@@ -627,6 +784,7 @@ export function createWorld(rng) {
               body.flashT = 0.12;
               events |= EV.BOSS_HIT;
               if (body.hp <= 0) events |= kill(body, true);
+              else events |= bossPhaseCheck(body);
             }
           } else if (body.kind === 'drone') {
             body.hp -= 2;
@@ -698,31 +856,7 @@ export function createWorld(rng) {
     }
     state.bodies = state.bodies.filter((b) => !b.dead);
 
-    if (state.planetHp <= 0) {
-      state.planetHp = 0;
-      state.screen = 'over';
-      state.shake = 18;
-      particles.burst(PLANET.x, PLANET.y, COLORS.planetMid, 110, 460);
-      particles.burst(PLANET.x, PLANET.y, COLORS.danger, 70, 380);
-      particles.flash(PLANET.x, PLANET.y, 130, '#ffffff');
-      events |= EV.GAME_OVER;
-      return events;
-    }
-
-    if (state.phase === 'active' && state.spawnQueue.length === 0 && state.bodies.length === 0) {
-      const bonus = 50 + 25 * state.wave;
-      state.score += bonus;
-      state.dust += 4;
-      particles.text(PLANET.x, PLANET.y - 90, `WAVE ${state.wave} CLEAR  +${bonus}`, COLORS.ink);
-      events |= EV.WAVE_CLEAR;
-      if (state.wave >= WAVES.length && !state.endless) {
-        state.screen = 'win';
-        events |= EV.VICTORY;
-      } else {
-        state.screen = 'shop';
-      }
-    }
-    return events;
+    return finishStep(events);
   }
 
   /** Loose the nova, if a charge is held and none is already rolling. */
@@ -782,6 +916,8 @@ export function createWorld(rng) {
   function stageBody(kind, x, y, vx, vy) {
     if (kind === 'drone') {
       state.bodies.push(makeDrone(rng, x, y, vx, vy));
+    } else if (kind === 'lancer') {
+      state.bodies.push(makeLancer(rng, x, y, vx, vy));
     } else if (kind === 'boss') {
       const boss = makeBoss(rng, x, y);
       boss.spawnedAt = state.time;

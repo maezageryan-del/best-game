@@ -36,6 +36,7 @@ export const KINDS = {
   comet:    { radius: 12, hp: 1, planetDamage: 10, score: 15, dust: 2, speedMin: 250, speedMax: 330 },
   drone:    { radius: 17, hp: 2, planetDamage: 8,  score: 40, dust: 3, speedMin: 120, speedMax: 150 },
   wraith:   { radius: 15, hp: 2, planetDamage: 9,  score: 35, dust: 2, speedMin: 66,  speedMax: 96 },
+  lancer:   { radius: 14, hp: 3, planetDamage: 12, score: 45, dust: 3, speedMin: 52,  speedMax: 78 },
   shard:    { radius: 16, hp: 2, planetDamage: 0,  score: 25, dust: 1, speedMin: 0,   speedMax: 0 },
   boss:     { radius: 64, hp: 26, planetDamage: 0, score: 500, dust: 12, speedMin: 7,  speedMax: 7 },
 };
@@ -43,6 +44,24 @@ export const KINDS = {
 /** The wraith: a dark rock with a violet heart that blinks toward the world,
  *  skipping a short hop closer every few seconds and shedding afterimages. */
 export const WRAITH = { blinkEvery: 2.3, blinkHop: 118, blinkMinDist: 150 };
+
+/** The lancer: a spear of black ice. It cruises slowly, hangs still for a windup
+ *  while its aim settles on the world, then dashes in a straight line fast enough
+ *  to be a weapon itself — anything it crosses, it shatters or is shattered by. */
+export const LANCER = {
+  windup: 0.55,
+  dashSpeed: 580,
+  dashTime: 0.8,
+  cycleMin: 2.1,
+  cycleMax: 3.3,
+  /** It only gathers for a dash when the world is at least this far away. */
+  minRange: 210,
+};
+
+/** The Hollow Moon's eclipse: below half health the boss changes phase — the sky
+ *  darkens, its shards quicken, it sheds splitters instead of pebbles, and every
+ *  few seconds it throws a three-rock volley straight at the world. */
+export const BOSS_PHASE2 = { shedEvery: 3.1, volleyEvery: 4.6, volleySpeed: 165, speed: 10.5, shardRate: 1.35 };
 
 /** Combo: kills chained inside the window raise the score multiplier, to a cap. */
 export const COMBO = { windowSec: 2.6, killsPerStep: 4, maxMult: 5 };
@@ -61,6 +80,8 @@ export const COLORS = {
   wellSoft: 'rgba(87, 230, 255, 0.16)',
   wraith: '#b78bff',
   wraithCore: '#e9dcff',
+  lancer: '#aef3ff',
+  eclipse: '#ff5a4a',
   horizon: '#aef3ff',
   danger: '#ff6a5e',
   dust: '#ffd166',
@@ -114,12 +135,14 @@ export const WAVES = [
     { kind: 'drone', count: 3, gap: 5.0, delay: 1.0 },
     { kind: 'comet', count: 6, gap: 1.5, delay: 0.5 },
     { kind: 'pebble', count: 8, gap: 1.2, delay: 3.0 },
+    { kind: 'lancer', count: 2, gap: 4.2, delay: 6.0 },
   ] },
   { name: 'Iron Hail', spawns: [
     { kind: 'boulder', count: 6, gap: 2.4, delay: 0.5 },
     { kind: 'drone', count: 2, gap: 7.0, delay: 3.0 },
     { kind: 'splitter', count: 4, gap: 2.6, delay: 5.0 },
     { kind: 'wraith', count: 3, gap: 3.8, delay: 6.5 },
+    { kind: 'lancer', count: 2, gap: 4.6, delay: 8.0 },
   ] },
   { name: 'The Storm Wall', spawns: [
     { kind: 'pebble', count: 12, gap: 0.9, delay: 0.5 },
@@ -127,12 +150,14 @@ export const WAVES = [
     { kind: 'drone', count: 3, gap: 5.5, delay: 4.0 },
     { kind: 'boulder', count: 4, gap: 3.0, delay: 7.0 },
     { kind: 'wraith', count: 3, gap: 3.4, delay: 9.0 },
+    { kind: 'lancer', count: 3, gap: 3.6, delay: 5.0 },
   ] },
   { name: 'The Hollow Moon', boss: true, spawns: [
     { kind: 'boss', count: 1, gap: 1, delay: 1.0 },
     { kind: 'pebble', count: 6, gap: 2.4, delay: 4.0 },
     { kind: 'comet', count: 4, gap: 2.6, delay: 9.0 },
     { kind: 'wraith', count: 2, gap: 5.0, delay: 12.0 },
+    { kind: 'lancer', count: 1, gap: 1, delay: 16.0 },
   ] },
 ];
 
@@ -146,6 +171,7 @@ export function endlessWave(number) {
     { kind: 'drone', count: Math.min(4, 1 + Math.floor(tier / 2)), gap: 6.0, delay: 5.0 },
     { kind: 'splitter', count: 3 + Math.floor(tier / 3), gap: 2.6, delay: 6.0 },
     { kind: 'wraith', count: 2 + Math.floor(tier / 2), gap: 3.6, delay: 7.0 },
+    { kind: 'lancer', count: 1 + Math.floor(tier / 2), gap: 4.4, delay: 6.5 },
   ];
   if (number % 5 === 0) spawns.unshift({ kind: 'boss', count: 1, gap: 1, delay: 1.0 });
   return { name: `Endless ${tier}`, boss: number % 5 === 0, spawns };

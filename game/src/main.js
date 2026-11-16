@@ -3,8 +3,9 @@
 // this file turns them into audio and announcements, routes clicks and keys to the
 // screens, keeps the best score, and stages the ?shot= scenes for screenshots.
 //
-// ?seed=N fixes the storm's pattern. ?shot=title|play|shop|boss|end (with &seed=N)
-// stages that scene instead of running the loop, paints it twice and sets __shotReady.
+// ?seed=N fixes the storm's pattern. ?shot=title|play|shop|boss|end|nova|lancer|boss2
+// (with &seed=N) stages that scene instead of running the loop, paints it twice and
+// sets __shotReady.
 
 import { BEST_KEY, STEP } from './config.js';
 import { createRandom } from './random.js';
@@ -70,6 +71,8 @@ function playEvents(events) {
   if (events & EV.DRONE_DIE) audio.droneDie();
   if (events & EV.DRONE_SHOT) audio.droneShot();
   if (events & EV.BOSS_ALARM) audio.bossAlarm();
+  if (events & EV.BOSS_PHASE) audio.bossAlarm();
+  if (events & EV.LANCER_DASH) audio.blink();
   if (events & EV.BLINK) audio.blink();
   if (events & EV.WELL_RELEASE) audio.release();
   if (events & EV.WAVE_CLEAR) audio.waveHorn();

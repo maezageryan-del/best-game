@@ -6,7 +6,7 @@
 // cracks. The engaged well draws its own warped field grid — bent rings and spokes —
 // so a single still frame explains the mechanic: space itself is pulled in here.
 
-import { COLORS, PLANET, VIEW } from './config.js';
+import { COLORS, LANCER, PLANET, VIEW } from './config.js';
 import { UPGRADES, SHOP_LAYOUT, canBuy, cardRect, costFor } from './upgrades.js';
 
 const FONT = 'Verdana, Geneva, sans-serif';
@@ -203,6 +203,8 @@ export function createRenderer(canvas, rng) {
   const glowGold = radialSprite([[0, 'rgba(255, 224, 150, 0.9)'], [0.45, 'rgba(255, 209, 102, 0.35)'], [1, 'rgba(255, 209, 102, 0)']]);
   const glowViolet = radialSprite([[0, 'rgba(216, 188, 255, 0.9)'], [0.45, 'rgba(160, 110, 255, 0.36)'], [1, 'rgba(140, 90, 255, 0)']]);
   const glowWhite = radialSprite([[0, 'rgba(255,255,255,0.95)'], [1, 'rgba(255,255,255,0)']]);
+  const glowIce = radialSprite([[0, 'rgba(230, 252, 255, 0.9)'], [0.45, 'rgba(174, 243, 255, 0.34)'], [1, 'rgba(140, 220, 255, 0)']]);
+  const glowCrimson = radialSprite([[0, 'rgba(255, 150, 120, 0.85)'], [0.45, 'rgba(255, 90, 74, 0.34)'], [1, 'rgba(200, 40, 30, 0)']]);
   const nebulaBlobs = [
     { sprite: radialSprite([[0, 'rgba(110, 80, 220, 0.30)'], [1, 'rgba(110, 80, 220, 0)']], 512), x: 300, y: 210, size: 860, speed: 0.011, phase: 0 },
     { sprite: radialSprite([[0, 'rgba(20, 150, 170, 0.26)'], [1, 'rgba(20, 150, 170, 0)']], 512), x: 1010, y: 590, size: 940, speed: 0.008, phase: 2.4 },
@@ -269,6 +271,38 @@ export function createRenderer(canvas, rng) {
       ctx.fillRect(star.x, star.y, star.size, star.size);
       ctx.restore();
     }
+  }
+
+  /**
+   * The eclipse: when the Moon turns, the whole sky changes mood — a crimson
+   * wash over everything and a black sun burning in the corner, so a single
+   * still frame says the fight has entered its second, worse half.
+   */
+  function drawEclipse(state) {
+    const wash = ctx.createLinearGradient(0, 0, 0, VIEW.height);
+    wash.addColorStop(0, 'rgba(38, 4, 30, 0.44)');
+    wash.addColorStop(0.55, 'rgba(52, 6, 26, 0.30)');
+    wash.addColorStop(1, 'rgba(74, 12, 16, 0.36)');
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, 0, VIEW.width, VIEW.height);
+    // The black sun, upper right: a dark disc in a flickering corona.
+    const sx = 1064;
+    const sy = 128;
+    stampGlow(ctx, glowCrimson, sx, sy, 250 + 22 * Math.sin(state.time * 2.7), 0.75);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 150, 110, 0.55)';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = COLORS.eclipse;
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 41 + 2.5 * Math.sin(state.time * 3.4), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#04050d';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 37, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
 
   /** The planet's own dust: motes on slow orbits, catching the light. */
@@ -430,6 +464,74 @@ export function createRenderer(canvas, rng) {
     if (drone.hp < drone.maxHp) drawHpBar(drone.x, drone.y - drone.radius - 10, 30, drone.hp / drone.maxHp, '#ff8a7a');
   }
 
+  /**
+   * One lancer: a spear of black ice, drawn long along its heading so its
+   * silhouette reads at thumbnail size. In the windup it hangs bright and
+   * still with a dashed line of intent laid on the world; in the dash it is
+   * all glow and streak. Its core brightens as the windup completes.
+   */
+  function drawLancer(state, body) {
+    if (body.dashState === 'windup') {
+      ctx.save();
+      ctx.globalAlpha = 0.30 + 0.22 * Math.sin(state.time * 18);
+      ctx.strokeStyle = '#ff8a7a';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([10, 8]);
+      ctx.beginPath();
+      ctx.moveTo(body.x, body.y);
+      ctx.lineTo(PLANET.x, PLANET.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+    const heading = body.dashState === 'cruise' ? body.angle : Math.atan2(body.aimY, body.aimX);
+    const gathering = body.dashState === 'windup' ? 1 - Math.max(0, body.dashT) / LANCER.windup : 0;
+    stampGlow(ctx, glowIce, body.x, body.y,
+      body.radius * (body.dashState === 'dash' ? 5.2 : 3.4 + gathering * 1.6),
+      body.dashState === 'dash' ? 0.65 : 0.34 + gathering * 0.3);
+    ctx.save();
+    ctx.translate(body.x, body.y);
+    ctx.rotate(heading);
+    if (body.dashState === 'windup') {
+      const pulse = 1 + 0.05 * Math.sin(state.time * 18);
+      ctx.scale(pulse, pulse);
+    }
+    const hull = ctx.createLinearGradient(0, -9, 0, 9);
+    hull.addColorStop(0, '#27455f');
+    hull.addColorStop(0.5, '#101d2e');
+    hull.addColorStop(1, '#05080f');
+    ctx.fillStyle = hull;
+    ctx.beginPath();
+    ctx.moveTo(30, 0);
+    ctx.lineTo(4, -8);
+    ctx.lineTo(-14, -4.5);
+    ctx.lineTo(-22, -11);
+    ctx.lineTo(-19, 0);
+    ctx.lineTo(-22, 11);
+    ctx.lineTo(-14, 4.5);
+    ctx.lineTo(4, 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#aef3ff';
+    ctx.globalAlpha = 0.75;
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    // The core: a bright seam along the spear that flares as the dash gathers.
+    ctx.save();
+    ctx.strokeStyle = '#eafcff';
+    ctx.lineWidth = 2.2;
+    ctx.shadowColor = '#aef3ff';
+    ctx.shadowBlur = 6 + gathering * 14 + (body.dashState === 'dash' ? 10 : 0);
+    ctx.beginPath();
+    ctx.moveTo(-13, 0);
+    ctx.lineTo(22, 0);
+    ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+    if (body.flashT > 0) stampGlow(ctx, glowWhite, body.x, body.y, body.radius * 2.6, Math.min(1, body.flashT / 0.09) * 0.55);
+    if (body.hp < body.maxHp) drawHpBar(body.x, body.y - body.radius - 12, 34, body.hp / body.maxHp, '#aef3ff');
+  }
+
   /** A small health bar over a tough body. */
   function drawHpBar(x, y, w, share, color) {
     ctx.save();
@@ -445,6 +547,7 @@ export function createRenderer(canvas, rng) {
     for (const body of state.bodies) {
       if (body.kind === 'comet') drawTrail(body, '#ff9a5e', 5);
       else if (body.kind === 'wraith') drawTrail(body, '#9a6bff', 5);
+      else if (body.kind === 'lancer') drawTrail(body, '#aef3ff', body.dashState === 'dash' ? 7 : 4);
       else if (body.hot) drawTrail(body, '#9be9ff', 4);
       // Spin Forge charge: a golden aura that grows as the well's gift builds.
       if (body.charge > 0.04 && body.kind !== 'drone') {
@@ -466,9 +569,15 @@ export function createRenderer(canvas, rng) {
         drawDrone(state, body);
         continue;
       }
+      if (body.kind === 'lancer') {
+        drawLancer(state, body);
+        continue;
+      }
       if (body.kind === 'boss') {
-        // The Moon carries its own weather: a pale gold aura behind the rock.
-        stampGlow(ctx, glowGold, body.x, body.y, body.radius * 3.6, 0.30);
+        // The Moon carries its own weather: a pale gold aura — until the eclipse
+        // turns it the colour of a wound.
+        if (body.phase === 2) stampGlow(ctx, glowCrimson, body.x, body.y, body.radius * 3.9, 0.42);
+        else stampGlow(ctx, glowGold, body.x, body.y, body.radius * 3.6, 0.30);
       }
       const sprite = body.sprite;
       const half = sprite.width / 2;
@@ -584,6 +693,41 @@ export function createRenderer(canvas, rng) {
       ctx.fill();
       ctx.restore();
     }
+  }
+
+  /**
+   * The nova's travelling front, drawn from the world's own radius so the
+   * picture and the rule agree: a lit band trailing behind a bright double
+   * edge. In v2 the nova was only its firing flash; now the wave itself is
+   * the loudest thing on the field while it crosses.
+   */
+  function drawNovaWave(state) {
+    const nova = state.nova;
+    if (!nova) return;
+    const r = nova.radius;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const band = ctx.createRadialGradient(PLANET.x, PLANET.y, Math.max(0, r - 115), PLANET.x, PLANET.y, Math.max(1, r));
+    band.addColorStop(0, 'rgba(87, 230, 255, 0)');
+    band.addColorStop(0.8, 'rgba(87, 230, 255, 0.10)');
+    band.addColorStop(1, 'rgba(190, 248, 255, 0.32)');
+    ctx.fillStyle = band;
+    ctx.beginPath();
+    ctx.arc(PLANET.x, PLANET.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(87, 230, 255, 0.5)';
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.arc(PLANET.x, PLANET.y, Math.max(1, r - 7), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(224, 253, 255, 0.95)';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = COLORS.well;
+    ctx.shadowBlur = 18;
+    ctx.beginPath();
+    ctx.arc(PLANET.x, PLANET.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   /**
@@ -745,10 +889,11 @@ export function createRenderer(canvas, rng) {
     const w = 520;
     const x = 640 - w / 2;
     const y = 750;
+    const eclipsed = boss.phase === 2;
     ctx.save();
-    ctx.shadowColor = '#ffe9b3';
+    ctx.shadowColor = eclipsed ? COLORS.eclipse : '#ffe9b3';
     ctx.shadowBlur = 10;
-    text(ctx, 'THE HOLLOW MOON', x, y - 18, 13, '#ffe9b3', 'left');
+    text(ctx, eclipsed ? 'THE HOLLOW MOON — ECLIPSE' : 'THE HOLLOW MOON', x, y - 18, 13, eclipsed ? '#ffb0a3' : '#ffe9b3', 'left');
     ctx.restore();
     const alive = boss.shards ? boss.shards.filter((s) => !s.dead).length : 0;
     for (let i = 0; i < 6; i += 1) {
@@ -767,14 +912,19 @@ export function createRenderer(canvas, rng) {
     const share = clamp01(boss.hp / boss.maxHp);
     if (share > 0) {
       const g = ctx.createLinearGradient(x, 0, x + w, 0);
-      g.addColorStop(0, '#ffe9b3');
-      g.addColorStop(1, '#e08a4c');
+      if (eclipsed) {
+        g.addColorStop(0, '#ffb0a3');
+        g.addColorStop(1, '#e03c2e');
+      } else {
+        g.addColorStop(0, '#ffe9b3');
+        g.addColorStop(1, '#e08a4c');
+      }
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.roundRect(x, y, w * share, 11, 5);
       ctx.fill();
     }
-    ctx.strokeStyle = 'rgba(255, 233, 179, 0.4)';
+    ctx.strokeStyle = eclipsed ? 'rgba(255, 150, 130, 0.45)' : 'rgba(255, 233, 179, 0.4)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.roundRect(x, y, w, 11, 5);
@@ -925,7 +1075,7 @@ export function createRenderer(canvas, rng) {
     ctx.fillText('GRAVITY SHEPHERD', 640, 148 + float);
     ctx.restore();
     text(ctx, 'Sling the storm. Save the world.', 640, 200 + float, 22, COLORS.dust, 'center', 400);
-    text(ctx, 'T W E L V E   W A V E S   ·   S I X   K I N D S   O F   S T O R M   ·   O N E   H O L L O W   M O O N', 640, 238, 12.5, COLORS.inkDim, 'center', 400);
+    text(ctx, 'T W E L V E   W A V E S   ·   S E V E N   K I N D S   O F   S T O R M   ·   O N E   H O L L O W   M O O N', 640, 238, 12.5, COLORS.inkDim, 'center', 400);
     panel(340, 508, 600, 168);
     text(ctx, 'HOLD the mouse — bend gravity around your well', 640, 540, 17, COLORS.ink);
     text(ctx, 'RELEASE — sling the rocks you caught into the swarm', 640, 572, 17, COLORS.ink);
@@ -1202,6 +1352,7 @@ export function createRenderer(canvas, rng) {
       ctx.translate((Math.random() - 0.5) * state.shake, (Math.random() - 0.5) * state.shake);
     }
     drawSky(state);
+    if (state.biome === 'eclipse') drawEclipse(state);
     const inGame = state.screen === 'play' || state.screen === 'shop';
     if (state.screen === 'title') drawTitleHalo(state);
     if (!inGame) {
@@ -1224,6 +1375,7 @@ export function createRenderer(canvas, rng) {
       drawMoons(world);
       drawBodies(state);
       state.particles.draw(ctx);
+      drawNovaWave(state);
       if (state.boss && state.screen === 'play') {
         // While the Moon lives, the edges of the world burn faintly red.
         const g = ctx.createRadialGradient(640, 400, 300, 640, 400, 760);

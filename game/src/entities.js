@@ -127,6 +127,16 @@ function baseBody(kind, x, y, vx, vy) {
     /** Wraith blink countdown, and the moment the boss entered (for its banner). */
     blinkTimer: 0,
     spawnedAt: 0,
+    /** Lancer dash state: 'cruise' | 'windup' | 'dash', its countdowns and aim. */
+    dashState: 'cruise',
+    dashTimer: 0,
+    dashT: 0,
+    aimX: 1,
+    aimY: 0,
+    /** Boss phase (1, then 2 at half health) and its eclipse-era timers. */
+    phase: 1,
+    volleyTimer: 0,
+    shedCount: 0,
   };
 }
 
@@ -146,6 +156,17 @@ export function makeDrone(rng, x, y, vx, vy) {
   body.fireTimer = rng.range(1.6, 3.0);
   body.orbitAngle = Math.atan2(y - PLANET.y, x - PLANET.x);
   body.sprite = null;
+  return body;
+}
+
+/** A lancer: drawn by hand in the renderer (a long spear needs its heading, not a
+ *  tumbling sprite). It starts cruising; its first dash comes due soon after. */
+export function makeLancer(rng, x, y, vx, vy) {
+  const body = baseBody('lancer', x, y, vx, vy);
+  body.sprite = null;
+  body.spin = 0;
+  body.angle = Math.atan2(vy, vx);
+  body.dashTimer = rng.range(0.9, 2.0);
   return body;
 }
 

@@ -41,6 +41,66 @@ export function createParticles(rng) {
       spawn({ x, y, vx: 0, vy: 0, life: 0.22, age: 0, size: radius, color, drag: 0, gravity: 0, glow: true, flash: true });
     },
 
+    /**
+     * A rich, layered burst — the v3 shatter. Three depths at once: white-hot
+     * sparks that outrun everything, mid debris in the body's own colour, and
+     * slow embers that hang, drift and fall after the rest is gone. `scale`
+     * grows counts and reach for big things (a boulder, the Moon).
+     */
+    burstRich(x, y, color, scale = 1) {
+      const sparks = Math.round(11 * scale);
+      for (let i = 0; i < sparks; i += 1) {
+        const a = rng.angle();
+        const speed = rng.range(280, 540) * (0.7 + scale * 0.3);
+        spawn({
+          x, y,
+          vx: Math.cos(a) * speed,
+          vy: Math.sin(a) * speed,
+          life: rng.range(0.16, 0.38),
+          age: 0,
+          size: rng.range(1.2, 2.4),
+          color: '#ffffff',
+          drag: 2.6,
+          gravity: 0,
+          glow: true,
+        });
+      }
+      const debris = Math.round(13 * scale);
+      for (let i = 0; i < debris; i += 1) {
+        const a = rng.angle();
+        const speed = rng.range(60, 310) * (0.7 + scale * 0.3);
+        spawn({
+          x, y,
+          vx: Math.cos(a) * speed,
+          vy: Math.sin(a) * speed,
+          life: rng.range(0.4, 0.95),
+          age: 0,
+          size: rng.range(2, 5),
+          color,
+          drag: 2.0,
+          gravity: 0,
+          glow: rng.chance(0.35),
+        });
+      }
+      const embers = Math.round(6 * scale);
+      for (let i = 0; i < embers; i += 1) {
+        const a = rng.angle();
+        const speed = rng.range(24, 95);
+        spawn({
+          x, y,
+          vx: Math.cos(a) * speed,
+          vy: Math.sin(a) * speed,
+          life: rng.range(0.9, 1.7),
+          age: 0,
+          size: rng.range(1.6, 3.2),
+          color,
+          drag: 0.7,
+          gravity: 46,
+          glow: true,
+        });
+      }
+    },
+
     /** A single spark with a chosen direction — comet tails and engine glints. */
     spark(x, y, vx, vy, color, life, size) {
       spawn({ x, y, vx, vy, life, age: 0, size, color, drag: 0.6, gravity: 0, glow: true });
@@ -127,6 +187,9 @@ export function createParticles(rng) {
         const fade = 1 - p.age / p.life;
         ctx.save();
         ctx.globalAlpha = Math.max(0, fade);
+        // Flashes composite additively: where two blooms overlap the light piles
+        // up past white, which is what makes a nova frame feel lit, not drawn.
+        if (p.flash) ctx.globalCompositeOperation = 'lighter';
         if (p.glow) {
           ctx.shadowColor = p.color;
           ctx.shadowBlur = 8;
