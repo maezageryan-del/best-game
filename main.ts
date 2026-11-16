@@ -1,4 +1,4 @@
-// Gravity Shepherd — the hand-in program (Node 22, standard library only).
+// LUMENFALL — the hand-in program (Node 22, standard library only).
 //
 // The game itself is the game/ folder beside this file: plain static files a desktop
 // browser plays offline. This program copies game/ and screenshots/ into the output

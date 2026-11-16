@@ -1,4 +1,4 @@
-// Sound: every note and noise in Gravity Shepherd is synthesised with WebAudio — no
+// Sound: every note and noise in LUMENFALL is synthesised with WebAudio — no
 // audio files, nothing to load. A tiny synth voice kit (oscillator blips, filtered
 // noise, pitch drops) is composed into the game's effects, and two detuned pads
 // breathe underneath as ambient music. Sound starts on the first user gesture,

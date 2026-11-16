@@ -1,7 +1,8 @@
 // Input: the pointer and the keyboard, read as one control object per frame.
-// The pointer steers the well; holding the button (or the Z key, for keyboard-only
-// players, whose anchor the arrow keys and WASD move) engages it. Discrete presses —
-// nova, pause, mute, confirm, shop buys — are queued as events the game loop drains.
+// The pointer steers the loom; holding the button (or the Z key, for keyboard-only
+// players, whose anchor the arrow keys and WASD move) bends the ribbon. Discrete
+// presses — flare, pause, mute, confirm, shop buys — are queued as events the
+// game loop drains.
 
 import { VIEW } from './config.js';
 
@@ -95,7 +96,7 @@ export function createInput(canvas) {
       return events.splice(0, events.length);
     },
     /**
-     * The control object for one step: where the well is, whether it is engaged.
+     * The control object for one step: where the loom is, whether it is held.
      * The keyboard anchor glides at 520 px/s while its keys are held.
      */
     control(dt) {

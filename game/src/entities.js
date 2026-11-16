@@ -1,205 +1,62 @@
-// Entities: the bodies that cross the field — rocks, comets, drones, the Hollow Moon
-// and its shield shards, drone bolts and stardust motes. Each rock gets a pre-rendered
-// sprite (an irregular, cratered polygon drawn once to an offscreen canvas) so the
-// render loop stays cheap and every rock looks like itself, not a circle.
+// LUMENFALL — the things that live in the sky: Gloom shards, magnet pylons, and
+// the Long Dark itself. Factories only; the world owns behaviour.
 
-import { KINDS, PLANET } from './config.js';
+import { KINDS, VILLAGE } from './config.js';
 
-/** Rock palettes by kind: fill, shade and rim light. */
-const ROCK_LOOK = {
-  pebble:   { fill: '#8d99ae', shade: '#5d6a80', rim: '#c3cedd' },
-  splitter: { fill: '#a78bca', shade: '#6f5596', rim: '#d9c6f2' },
-  boulder:  { fill: '#9c7a5b', shade: '#66492e', rim: '#d9b98f' },
-  comet:    { fill: '#ffb08a', shade: '#c25e3a', rim: '#ffe3b3' },
-  wraith:   { fill: '#2c2140', shade: '#171126', rim: '#b78bff' },
-  shard:    { fill: '#7fe7ff', shade: '#3d8fa8', rim: '#e3fbff' },
-  boss:     { fill: '#7d6f61', shade: '#453a30', rim: '#d9c9a8' },
-};
-
-/** Draw one rock's sprite: a jittered polygon with a shaded side and a few craters. */
-function rockSprite(rng, kind, radius) {
-  const look = ROCK_LOOK[kind] ?? ROCK_LOOK.pebble;
-  const pad = 6;
-  const size = Math.ceil((radius + pad) * 2);
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  const cx = size / 2;
-  const cy = size / 2;
-  const points = [];
-  const count = Math.max(8, Math.floor(radius * 0.55));
-  for (let i = 0; i < count; i += 1) {
-    const a = (i / count) * Math.PI * 2;
-    const r = radius * rng.range(0.78, 1.05);
-    points.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
-  }
-  ctx.beginPath();
-  points.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
-  ctx.closePath();
-  ctx.fillStyle = look.fill;
-  ctx.fill();
-  // Shade the lower-right so the rock reads as lit from the planet's side.
-  ctx.save();
-  ctx.clip();
-  const grad = ctx.createLinearGradient(cx - radius, cy - radius, cx + radius, cy + radius);
-  grad.addColorStop(0, 'rgba(255,255,255,0.20)');
-  grad.addColorStop(0.55, 'rgba(0,0,0,0)');
-  grad.addColorStop(1, 'rgba(0,0,0,0.38)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-  ctx.fillStyle = look.shade;
-  const craters = Math.max(1, Math.floor(radius / 12));
-  for (let i = 0; i < craters; i += 1) {
-    const a = rng.angle();
-    const d = rng.range(0, radius * 0.55);
-    ctx.globalAlpha = 0.35;
-    ctx.beginPath();
-    ctx.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, rng.range(2.5, radius * 0.22), 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-  ctx.beginPath();
-  points.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
-  ctx.closePath();
-  ctx.strokeStyle = look.rim;
-  ctx.globalAlpha = 0.5;
-  ctx.lineWidth = 1.4;
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-  if (kind === 'wraith') {
-    // The wraith's heart: a bright violet core that burns through the dark shell,
-    // so the eye finds it instantly among honest grey rocks.
-    const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.62);
-    core.addColorStop(0, 'rgba(240, 230, 255, 0.95)');
-    core.addColorStop(0.35, 'rgba(183, 139, 255, 0.75)');
-    core.addColorStop(1, 'rgba(120, 70, 220, 0)');
-    ctx.fillStyle = core;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius * 0.62, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  if (kind === 'boss') {
-    // The Hollow Moon is hollow the way a drum is hollow: something inside it
-    // glows pale gold through the cracks, and its great craters read at a glance.
-    const heart = ctx.createRadialGradient(cx - radius * 0.12, cy - radius * 0.08, 0, cx, cy, radius * 0.72);
-    heart.addColorStop(0, 'rgba(255, 240, 200, 0.55)');
-    heart.addColorStop(0.4, 'rgba(230, 190, 120, 0.22)');
-    heart.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = heart;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius * 0.72, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(24, 18, 12, 0.5)';
-    for (const [ox, oy, orr] of [[-0.34, -0.2, 0.21], [0.3, 0.26, 0.26], [0.08, -0.44, 0.15]]) {
-      ctx.beginPath();
-      ctx.arc(cx + ox * radius, cy + oy * radius, orr * radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  return canvas;
-}
-
-let nextId = 1;
-
-/** A body: anything with position, velocity and a radius that the world steps. */
-function baseBody(kind, x, y, vx, vy) {
+/** One Gloom: a dark shard drifting down on the sleeping village. */
+export function makeGloom(rng, kind, x, y, vx = 0, vy = 0) {
   const spec = KINDS[kind];
+  const speed = vy !== 0 ? Math.abs(vy) : rng.range(spec.speedMin, spec.speedMax);
   return {
-    id: nextId++,
     kind,
-    x, y, vx, vy,
+    x, y,
+    vx: vx !== 0 ? vx : rng.range(-14, 14),
+    vy: speed,
     radius: spec.radius,
     hp: spec.hp,
     maxHp: spec.hp,
-    angle: 0,
-    spin: 0,
-    hot: false,
+    villageDamage: spec.villageDamage,
+    score: spec.score,
+    dust: spec.dust,
+    swayPhase: rng.angle(),
+    swayAmp: kind === 'weaver' ? rng.range(60, 110) : rng.range(8, 22),
+    swaySpeed: rng.range(0.9, 1.6),
+    rot: rng.angle(),
+    spin: rng.range(-0.5, 0.5),
+    hitFlash: 0,
     dead: false,
-    trail: [],
-    fireTimer: 0,
-    shedTimer: 0,
-    orbitAngle: 0,
-    /** Spin Forge charge, 0..1: built while the well holds the body, spent on impact. */
-    charge: 0,
-    /** Seconds of white hit-flash left to draw. */
-    flashT: 0,
-    /** Wraith blink countdown, and the moment the boss entered (for its banner). */
-    blinkTimer: 0,
-    spawnedAt: 0,
-    /** Lancer dash state: 'cruise' | 'windup' | 'dash', its countdowns and aim. */
-    dashState: 'cruise',
-    dashTimer: 0,
-    dashT: 0,
-    aimX: 1,
-    aimY: 0,
-    /** Boss phase (1, then 2 at half health) and its eclipse-era timers. */
-    phase: 1,
-    volleyTimer: 0,
-    shedCount: 0,
   };
 }
 
-/** A rock of the given kind, with its own sprite and a slow tumble. */
-export function makeRock(rng, kind, x, y, vx, vy) {
-  const body = baseBody(kind, x, y, vx, vy);
-  body.spin = rng.range(-1.1, 1.1);
-  body.angle = rng.angle();
-  body.sprite = rockSprite(rng, kind, body.radius);
-  if (kind === 'wraith') body.blinkTimer = rng.range(1.2, 2.4);
-  return body;
+/** A magnet pylon: planted by the player, it bends the aurora toward itself. */
+export function makePylon(x, y) {
+  return {
+    x: Math.max(40, Math.min(1240, x)),
+    y: Math.max(70, Math.min(VILLAGE.groundY - 30, y)),
+    bornAt: 0,
+    dead: false,
+  };
 }
 
-/** A hunter drone: it will steer for an orbit around the planet and shoot at it. */
-export function makeDrone(rng, x, y, vx, vy) {
-  const body = baseBody('drone', x, y, vx, vy);
-  body.fireTimer = rng.range(1.6, 3.0);
-  body.orbitAngle = Math.atan2(y - PLANET.y, x - PLANET.x);
-  body.sprite = null;
-  return body;
-}
-
-/** A lancer: drawn by hand in the renderer (a long spear needs its heading, not a
- *  tumbling sprite). It starts cruising; its first dash comes due soon after. */
-export function makeLancer(rng, x, y, vx, vy) {
-  const body = baseBody('lancer', x, y, vx, vy);
-  body.sprite = null;
-  body.spin = 0;
-  body.angle = Math.atan2(vy, vx);
-  body.dashTimer = rng.range(0.9, 2.0);
-  return body;
-}
-
-/** The Hollow Moon: a boss rock with shield shards orbiting it (added by the world). */
-export function makeBoss(rng, x, y) {
-  const body = baseBody('boss', x, y, 0, KINDS.boss.speedMin);
-  body.sprite = rockSprite(rng, 'boss', body.radius);
-  body.shedTimer = 5;
-  body.shards = [];
-  return body;
-}
-
-/** One of the Moon's shield shards: kinematically orbited by the world, breakable. */
-export function makeShard(rng, boss, index, total) {
-  const body = baseBody('shard', boss.x, boss.y, 0, 0);
-  body.boss = boss;
-  body.orbitIndex = index;
-  body.orbitTotal = total;
-  body.sprite = rockSprite(rng, 'shard', body.radius);
-  return body;
-}
-
-/** A drone's bolt: a fast, fragile shot aimed at the planet. */
-export function makeBolt(x, y, vx, vy) {
-  return { id: nextId++, kind: 'bolt', x, y, vx, vy, radius: 5, dead: false, trail: [] };
-}
-
-/** A mote of stardust: dropped by a shattered rock, it homes to the planet and pays out. */
-export function makeDust(x, y, vx, vy) {
-  return { id: nextId++, kind: 'dust', x, y, vx, vy, radius: 4, dead: false, age: 0 };
-}
-
-/** Speed in px/s. */
-export function speedOf(body) {
-  return Math.hypot(body.vx, body.vy);
+/** The Long Dark: a huge mass of night that eats light and births Gloom. */
+export function makeBoss(rng) {
+  const spec = KINDS.boss;
+  return {
+    kind: 'boss',
+    x: 640,
+    y: -120,
+    vx: 0,
+    vy: 26,
+    radius: spec.radius,
+    hp: spec.hp,
+    maxHp: spec.hp,
+    phase: 1,
+    spawnTimer: 2.2,
+    volleyTimer: 5,
+    touchTimer: 0,
+    driftDir: rng.chance(0.5) ? 1 : -1,
+    rot: 0,
+    hitFlash: 0,
+    dead: false,
+  };
 }

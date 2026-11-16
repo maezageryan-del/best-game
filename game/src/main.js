@@ -1,9 +1,9 @@
-// Gravity Shepherd — the shell: boot, the fixed-step loop, and the wiring between
+// LUMENFALL — the shell: boot, the fixed-step loop, and the wiring between
 // the world, the renderer, the input and the sound. The world returns event masks;
 // this file turns them into audio and announcements, routes clicks and keys to the
 // screens, keeps the best score, and stages the ?shot= scenes for screenshots.
 //
-// ?seed=N fixes the storm's pattern. ?shot=title|play|shop|boss|end|nova|lancer|boss2
+// ?seed=N fixes the night's pattern. ?shot=title|wave|shop|boss
 // (with &seed=N) stages that scene instead of running the loop, paints it twice and
 // sets __shotReady.
 
@@ -33,7 +33,7 @@ const world = createWorld(rng);
 const renderer = createRenderer(canvas, rng);
 const audio = createAudio();
 
-/** Exposed for the play-test (and curious shepherds): the world and its step. */
+/** Exposed for the play-test (and the curious): the world and its step. */
 window.__game = { world, STEP };
 
 function readBest() {
@@ -65,16 +65,13 @@ let lastPickupSound = 0;
 
 /** Turn one step's event mask into the sounds those events earned. */
 function playEvents(events) {
-  if (events & EV.PLANET_HIT) audio.planetHit();
-  else if (events & EV.SHIELD_HIT) audio.shieldHit();
-  if (events & EV.SHATTER) audio.shatter(Boolean(events & EV.BOSS_HIT));
-  if (events & EV.DRONE_DIE) audio.droneDie();
-  if (events & EV.DRONE_SHOT) audio.droneShot();
+  if (events & EV.VILLAGE_HIT) audio.planetHit();
+  if (events & EV.DISSOLVE) audio.shatter(Boolean(events & EV.BOSS_HIT));
+  if (events & EV.SWEEP) audio.shatter(true);
   if (events & EV.BOSS_ALARM) audio.bossAlarm();
   if (events & EV.BOSS_PHASE) audio.bossAlarm();
-  if (events & EV.LANCER_DASH) audio.blink();
-  if (events & EV.BLINK) audio.blink();
-  if (events & EV.WELL_RELEASE) audio.release();
+  if (events & EV.FLARE) audio.nova();
+  if (events & EV.PYLON_PLACE) audio.click();
   if (events & EV.WAVE_CLEAR) audio.waveHorn();
   if (events & EV.VICTORY) audio.victory();
   if (events & EV.GAME_OVER) audio.gameOver();
@@ -88,11 +85,11 @@ function playEvents(events) {
 }
 
 const SCREEN_LINES = {
-  title: 'Gravity Shepherd. Click or press Enter to play.',
-  play: 'Gravity Shepherd, playing.',
-  shop: 'Between waves: spend stardust, then launch the next wave.',
-  over: 'The world falls. Click or press Enter to try again.',
-  win: 'The world endures. Press Enter for endless mode.',
+  title: 'LUMENFALL. Click or press Enter to play.',
+  play: 'LUMENFALL, playing.',
+  shop: 'Between nights: spend stardust at the Dawn Market, then launch the next night.',
+  over: 'The village sleeps in darkness. Click or press Enter to try again.',
+  win: 'Dawn breaks. Press Enter for endless nights.',
 };
 let announcedScreen = '';
 
@@ -118,7 +115,10 @@ function handleEvent(event, input) {
   }
   if (ui.paused) return;
   if (event.type === 'nova') {
-    if (state.screen === 'play' && world.fireNova()) audio.nova();
+    if (state.screen === 'play') {
+      const ev = world.fireFlare();
+      if (ev) playEvents(ev);
+    }
     return;
   }
   if (event.type === 'buy') {
@@ -141,6 +141,9 @@ function handleEvent(event, input) {
     if (state.screen === 'title' || state.screen === 'over' || state.screen === 'win') {
       world.confirm();
       audio.click();
+    } else if (state.screen === 'play') {
+      // A click plants a magnet pylon where it lands.
+      if (world.placePylon(event.x, event.y)) audio.buy();
     } else if (state.screen === 'shop') {
       let bought = false;
       for (let i = 0; i < UPGRADES.length; i += 1) {

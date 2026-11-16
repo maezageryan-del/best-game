@@ -1,177 +1,175 @@
-// Gravity Shepherd — the numbers that shape the game: the field, the planet, the well,
-// and the twelve waves of the storm. Everything tunable lives here so the rest of the
-// code can stay about behaviour, not constants.
+// LUMENFALL — the numbers that shape the game: the sky, the village, the aurora
+// ribbons, the magnet pylons, and the twelve nights of Gloom. Everything tunable
+// lives here so the rest of the code can stay about behaviour, not constants.
 
 /** The play field, in world units (the canvas is exactly this size, letterboxed). */
 export const VIEW = { width: 1280, height: 800 };
 
-/** The world under attack: fixed at the field's heart, a little below centre so the HUD breathes. */
-export const PLANET = { x: 640, y: 438, radius: 46, maxHp: 100 };
+/** The village under the sky: the ground line Gloom must never reach. */
+export const VILLAGE = { groundY: 648, maxHp: 100, houses: 9 };
 
 /** The simulation step: the world advances in fixed slices so every machine plays the same game. */
 export const STEP = 1 / 60;
 
-/** The gravity well the player projects: what it reaches, how hard it pulls, what makes a rock a weapon. */
-export const WELL = {
-  baseRadius: 152,
-  radiusPerLevel: 22,
-  basePull: 1750,
-  pullPerLevel: 1.18,
-  /** A body moving faster than this (px/s) is "hot": it shatters what it strikes. The
-   *  line sits a notch below the speed a captured rock settles into orbit at, so
-   *  anything the well has spun up — even before release — is already a weapon. */
-  weaponSpeed: 260,
-  /** Extra sideways push inside the well, as a share of the pull: it is what makes rocks orbit, not just fall in. */
-  swirlShare: 0.42,
+/** An aurora ribbon: a verlet chain of points flowing across the sky. Pylons bend
+ *  it; the pointer (the loom) bends it while held. Its glow dissolves Gloom on
+ *  contact, at an energy cost — a spent ribbon goes dim until it recovers. */
+export const RIBBON = {
+  count: 3,
+  maxCount: 5,
+  points: 26,
+  /** Base kill radius (half the visible width). */
+  width: 26,
+  widthPerLevel: 6,
+  energyMax: 100,
+  dissolveCost: 14,
+  regenPerSec: 9,
+  /** How far a pylon reaches and how hard it pulls the ribbon. */
+  bendRadius: 260,
+  bendRadiusPerLevel: 24,
+  bendStrength: 900,
+  bendStrengthPerLevel: 1.15,
+  /** The loom: the pointer's pull while the button is held. */
+  loomRadius: 240,
+  loomStrength: 1500,
+  /** The ribbon's own restless drift: it never hangs still. */
+  swayAmp: 34,
+  swaySpeed: 0.7,
 };
 
-/** The nova the player can loose from the planet: how far it reaches and how fast the ring travels. */
-export const NOVA = { radius: 330, speed: 620, startCharges: 1, maxCharges: 4 };
+/** Magnet pylons: the player's only tool. Click to plant one; it bends the nearest
+ *  ribbon toward itself. You start with two and buy more at the Dawn Market. */
+export const PYLON = { start: 2, max: 6 };
 
-/** Body kinds: size, toughness, how hard they hit the planet, what they pay when shattered. */
+/** The flare: Space (or right-click) looses a pulse along every ribbon that
+ *  dissolves Gloom touching it. Charges are bought, never infinite. */
+export const FLARE = { startCharges: 1, maxCharges: 4, radius: 70 };
+
+/** Deep Night: when the village is hurt (HP at or below 30) and this is owned,
+ *  time slows to 45% for five seconds — once per wave. */
+export const DEEP_NIGHT = { triggerHp: 30, factor: 0.45, seconds: 5 };
+
+/** Gloom kinds: size, toughness, how hard they hit the village, what they pay when dissolved. */
 export const KINDS = {
-  pebble:   { radius: 13, hp: 1, planetDamage: 6,  score: 10, dust: 1, speedMin: 52,  speedMax: 86 },
-  splitter: { radius: 21, hp: 2, planetDamage: 8,  score: 20, dust: 2, speedMin: 46,  speedMax: 68 },
-  boulder:  { radius: 30, hp: 4, planetDamage: 14, score: 30, dust: 3, speedMin: 38,  speedMax: 58 },
-  comet:    { radius: 12, hp: 1, planetDamage: 10, score: 15, dust: 2, speedMin: 250, speedMax: 330 },
-  drone:    { radius: 17, hp: 2, planetDamage: 8,  score: 40, dust: 3, speedMin: 120, speedMax: 150 },
-  wraith:   { radius: 15, hp: 2, planetDamage: 9,  score: 35, dust: 2, speedMin: 66,  speedMax: 96 },
-  lancer:   { radius: 14, hp: 3, planetDamage: 12, score: 45, dust: 3, speedMin: 52,  speedMax: 78 },
-  shard:    { radius: 16, hp: 2, planetDamage: 0,  score: 25, dust: 1, speedMin: 0,   speedMax: 0 },
-  boss:     { radius: 64, hp: 26, planetDamage: 0, score: 500, dust: 12, speedMin: 7,  speedMax: 7 },
+  wisp:   { radius: 12, hp: 1, villageDamage: 4,  score: 10, dust: 1, speedMin: 62, speedMax: 92 },
+  shard:  { radius: 19, hp: 2, villageDamage: 6,  score: 20, dust: 2, speedMin: 44, speedMax: 66 },
+  brute:  { radius: 30, hp: 3, villageDamage: 12, score: 35, dust: 3, speedMin: 34, speedMax: 52 },
+  weaver: { radius: 15, hp: 2, villageDamage: 6,  score: 30, dust: 2, speedMin: 58, speedMax: 84 },
+  boss:   { radius: 92, hp: 40, villageDamage: 0, score: 500, dust: 12, speedMin: 0, speedMax: 0 },
 };
 
-/** The wraith: a dark rock with a violet heart that blinks toward the world,
- *  skipping a short hop closer every few seconds and shedding afterimages. */
-export const WRAITH = { blinkEvery: 2.3, blinkHop: 118, blinkMinDist: 150 };
+/** The Long Dark: below half health it turns — the sky darkens, it drifts side to
+ *  side, it spawns Gloom faster and throws three-shard volleys at the village. */
+export const BOSS_PHASE2 = { spawnEvery: 1.7, volleyEvery: 4.2, volleySpeed: 150, driftSpeed: 46 };
 
-/** The lancer: a spear of black ice. It cruises slowly, hangs still for a windup
- *  while its aim settles on the world, then dashes in a straight line fast enough
- *  to be a weapon itself — anything it crosses, it shatters or is shattered by. */
-export const LANCER = {
-  windup: 0.55,
-  dashSpeed: 580,
-  dashTime: 0.8,
-  cycleMin: 2.1,
-  cycleMax: 3.3,
-  /** It only gathers for a dash when the world is at least this far away. */
-  minRange: 210,
-};
-
-/** The Hollow Moon's eclipse: below half health the boss changes phase — the sky
- *  darkens, its shards quicken, it sheds splitters instead of pebbles, and every
- *  few seconds it throws a three-rock volley straight at the world. */
-export const BOSS_PHASE2 = { shedEvery: 3.1, volleyEvery: 4.6, volleySpeed: 165, speed: 10.5, shardRate: 1.35 };
-
-/** Combo: kills chained inside the window raise the score multiplier, to a cap. */
+/** Combo: dissolves chained inside the window raise the score multiplier, to a cap. */
 export const COMBO = { windowSec: 2.6, killsPerStep: 4, maxMult: 5 };
 
 /** localStorage key for the best score. */
-export const BEST_KEY = 'gravity-shepherd-best';
+export const BEST_KEY = 'lumenfall-best';
 
-/** The palette: deep indigo space, a teal-green world, cyan gravity, coral danger, amber stardust. */
+/** The palette: a cold blue night, warm amber windows, and aurora green-violet light. */
 export const COLORS = {
-  spaceTop: '#070b1e',
-  spaceBottom: '#0d1330',
-  planetLight: '#7fe7c4',
-  planetMid: '#2ea88a',
-  planetDark: '#0f5f52',
-  well: '#57e6ff',
-  wellSoft: 'rgba(87, 230, 255, 0.16)',
-  wraith: '#b78bff',
-  wraithCore: '#e9dcff',
-  lancer: '#aef3ff',
-  eclipse: '#ff5a4a',
-  horizon: '#aef3ff',
+  skyTop: '#04061a',
+  skyMid: '#0a1a3d',
+  skyHorizon: '#123f4a',
+  ground: '#dfe9f5',
+  groundShadow: '#8fa8c8',
+  house: '#1b2740',
+  houseRoof: '#e8f1fb',
+  windowLit: '#ffc46b',
+  windowDark: '#2c3a58',
+  pylon: '#c9d6ea',
+  pylonGlow: '#7fe7c4',
+  gloom: '#0a0618',
+  gloomCore: '#b78bff',
   danger: '#ff6a5e',
   dust: '#ffd166',
   ink: '#eaf6ff',
   inkDim: '#9db8d6',
-  panel: 'rgba(10, 16, 38, 0.88)',
-  panelEdge: 'rgba(87, 230, 255, 0.45)',
+  panel: 'rgba(8, 14, 34, 0.88)',
+  panelEdge: 'rgba(127, 231, 196, 0.5)',
+  ribbonA: '#4dff9d',
+  ribbonB: '#b78bff',
+  ribbonC: '#57e6ff',
 };
 
 /**
- * The twelve waves of the storm. Each entry spawns `count` bodies of `kind`, one every
- * `gap` seconds, starting `delay` seconds into the wave. The storm teaches one idea at
- * a time: drift, mass, splitting, speed, shooters — then mixes them, then the Hollow Moon.
+ * The twelve nights. Each entry spawns `count` Gloom of `kind`, one every `gap`
+ * seconds, starting `delay` seconds into the wave. The night teaches one idea at
+ * a time: drift, mass, splitting paths, speed, hunters — then mixes them, then
+ * the Long Dark.
  */
 export const WAVES = [
-  { name: 'First Drift', spawns: [
-    { kind: 'pebble', count: 9, gap: 1.1, delay: 0.5 },
+  { name: 'First Frost', spawns: [
+    { kind: 'wisp', count: 9, gap: 1.1, delay: 0.5 },
   ] },
-  { name: 'Crossing Paths', spawns: [
-    { kind: 'pebble', count: 10, gap: 1.2, delay: 0.5 },
+  { name: 'Shards of Night', spawns: [
+    { kind: 'wisp', count: 10, gap: 1.2, delay: 0.5 },
   ] },
-  { name: 'Heavy Weather', spawns: [
-    { kind: 'pebble', count: 6, gap: 1.3, delay: 0.5 },
-    { kind: 'boulder', count: 3, gap: 3.4, delay: 2.5 },
+  { name: 'Heavy Gloom', spawns: [
+    { kind: 'wisp', count: 6, gap: 1.3, delay: 0.5 },
+    { kind: 'brute', count: 3, gap: 3.4, delay: 2.5 },
   ] },
-  { name: 'The Splitting', spawns: [
-    { kind: 'splitter', count: 4, gap: 2.6, delay: 0.5 },
-    { kind: 'pebble', count: 6, gap: 1.4, delay: 3.0 },
+  { name: 'The Weavers', spawns: [
+    { kind: 'weaver', count: 4, gap: 2.6, delay: 0.5 },
+    { kind: 'wisp', count: 6, gap: 1.4, delay: 3.0 },
   ] },
-  { name: 'Comet Rain', spawns: [
-    { kind: 'comet', count: 6, gap: 1.6, delay: 0.5 },
-    { kind: 'pebble', count: 6, gap: 1.6, delay: 2.0 },
+  { name: 'Shard Rain', spawns: [
+    { kind: 'shard', count: 6, gap: 1.6, delay: 0.5 },
+    { kind: 'wisp', count: 6, gap: 1.6, delay: 2.0 },
   ] },
   { name: 'Teeth of the Dark', spawns: [
-    { kind: 'boulder', count: 4, gap: 3.0, delay: 0.5 },
-    { kind: 'splitter', count: 4, gap: 2.8, delay: 2.0 },
-    { kind: 'pebble', count: 6, gap: 1.5, delay: 4.0 },
+    { kind: 'brute', count: 4, gap: 3.0, delay: 0.5 },
+    { kind: 'shard', count: 4, gap: 2.8, delay: 2.0 },
+    { kind: 'wisp', count: 6, gap: 1.5, delay: 4.0 },
   ] },
   { name: 'First Hunters', spawns: [
-    { kind: 'drone', count: 2, gap: 6.0, delay: 1.0 },
-    { kind: 'pebble', count: 8, gap: 1.3, delay: 0.5 },
-    { kind: 'comet', count: 3, gap: 2.2, delay: 5.0 },
+    { kind: 'weaver', count: 2, gap: 6.0, delay: 1.0 },
+    { kind: 'wisp', count: 8, gap: 1.3, delay: 0.5 },
+    { kind: 'shard', count: 3, gap: 2.2, delay: 5.0 },
   ] },
   { name: 'The Grind', spawns: [
-    { kind: 'boulder', count: 5, gap: 2.8, delay: 0.5 },
-    { kind: 'splitter', count: 5, gap: 2.4, delay: 1.5 },
-    { kind: 'comet', count: 4, gap: 2.0, delay: 6.0 },
-    { kind: 'wraith', count: 2, gap: 4.5, delay: 8.0 },
+    { kind: 'brute', count: 5, gap: 2.8, delay: 0.5 },
+    { kind: 'shard', count: 5, gap: 2.4, delay: 1.5 },
+    { kind: 'wisp', count: 4, gap: 2.0, delay: 6.0 },
+    { kind: 'weaver', count: 2, gap: 4.5, delay: 8.0 },
   ] },
-  { name: 'Crossfire', spawns: [
-    { kind: 'drone', count: 3, gap: 5.0, delay: 1.0 },
-    { kind: 'comet', count: 6, gap: 1.5, delay: 0.5 },
-    { kind: 'pebble', count: 8, gap: 1.2, delay: 3.0 },
-    { kind: 'lancer', count: 2, gap: 4.2, delay: 6.0 },
+  { name: 'Crosswinds', spawns: [
+    { kind: 'weaver', count: 3, gap: 5.0, delay: 1.0 },
+    { kind: 'shard', count: 6, gap: 1.5, delay: 0.5 },
+    { kind: 'wisp', count: 8, gap: 1.2, delay: 3.0 },
+    { kind: 'brute', count: 2, gap: 4.2, delay: 6.0 },
   ] },
-  { name: 'Iron Hail', spawns: [
-    { kind: 'boulder', count: 6, gap: 2.4, delay: 0.5 },
-    { kind: 'drone', count: 2, gap: 7.0, delay: 3.0 },
-    { kind: 'splitter', count: 4, gap: 2.6, delay: 5.0 },
-    { kind: 'wraith', count: 3, gap: 3.8, delay: 6.5 },
-    { kind: 'lancer', count: 2, gap: 4.6, delay: 8.0 },
+  { name: 'Iron Gloom', spawns: [
+    { kind: 'brute', count: 6, gap: 2.4, delay: 0.5 },
+    { kind: 'weaver', count: 2, gap: 7.0, delay: 3.0 },
+    { kind: 'shard', count: 4, gap: 2.6, delay: 5.0 },
+    { kind: 'wisp', count: 3, gap: 3.8, delay: 6.5 },
   ] },
-  { name: 'The Storm Wall', spawns: [
-    { kind: 'pebble', count: 12, gap: 0.9, delay: 0.5 },
-    { kind: 'comet', count: 7, gap: 1.3, delay: 2.0 },
-    { kind: 'drone', count: 3, gap: 5.5, delay: 4.0 },
-    { kind: 'boulder', count: 4, gap: 3.0, delay: 7.0 },
-    { kind: 'wraith', count: 3, gap: 3.4, delay: 9.0 },
-    { kind: 'lancer', count: 3, gap: 3.6, delay: 5.0 },
+  { name: 'The Dark Wall', spawns: [
+    { kind: 'wisp', count: 12, gap: 0.9, delay: 0.5 },
+    { kind: 'shard', count: 7, gap: 1.3, delay: 2.0 },
+    { kind: 'weaver', count: 3, gap: 5.5, delay: 4.0 },
+    { kind: 'brute', count: 4, gap: 3.0, delay: 7.0 },
+    { kind: 'wisp', count: 3, gap: 3.4, delay: 9.0 },
   ] },
-  { name: 'The Hollow Moon', boss: true, spawns: [
+  { name: 'The Long Dark', boss: true, spawns: [
     { kind: 'boss', count: 1, gap: 1, delay: 1.0 },
-    { kind: 'pebble', count: 6, gap: 2.4, delay: 4.0 },
-    { kind: 'comet', count: 4, gap: 2.6, delay: 9.0 },
-    { kind: 'wraith', count: 2, gap: 5.0, delay: 12.0 },
-    { kind: 'lancer', count: 1, gap: 1, delay: 16.0 },
+    { kind: 'wisp', count: 6, gap: 2.4, delay: 4.0 },
+    { kind: 'shard', count: 4, gap: 2.6, delay: 9.0 },
+    { kind: 'weaver', count: 2, gap: 5.0, delay: 12.0 },
   ] },
 ];
 
-/** Endless waves past the twelfth: the same storm, thicker — and the Moon returns every fifth. */
+/** Endless nights past the twelfth: the same dark, thicker — and the Long Dark returns every fifth. */
 export function endlessWave(number) {
   const tier = number - WAVES.length;
   const spawns = [
-    { kind: 'pebble', count: 8 + tier, gap: Math.max(0.7, 1.3 - tier * 0.06), delay: 0.5 },
-    { kind: 'boulder', count: 3 + Math.floor(tier / 2), gap: 2.8, delay: 2.0 },
-    { kind: 'comet', count: 3 + Math.floor(tier / 2), gap: 1.8, delay: 4.0 },
-    { kind: 'drone', count: Math.min(4, 1 + Math.floor(tier / 2)), gap: 6.0, delay: 5.0 },
-    { kind: 'splitter', count: 3 + Math.floor(tier / 3), gap: 2.6, delay: 6.0 },
-    { kind: 'wraith', count: 2 + Math.floor(tier / 2), gap: 3.6, delay: 7.0 },
-    { kind: 'lancer', count: 1 + Math.floor(tier / 2), gap: 4.4, delay: 6.5 },
+    { kind: 'wisp', count: 8 + tier, gap: Math.max(0.7, 1.3 - tier * 0.06), delay: 0.5 },
+    { kind: 'brute', count: 3 + Math.floor(tier / 2), gap: 2.8, delay: 2.0 },
+    { kind: 'shard', count: 3 + Math.floor(tier / 2), gap: 1.8, delay: 4.0 },
+    { kind: 'weaver', count: Math.min(4, 1 + Math.floor(tier / 2)), gap: 6.0, delay: 5.0 },
   ];
   if (number % 5 === 0) spawns.unshift({ kind: 'boss', count: 1, gap: 1, delay: 1.0 });
   return { name: `Endless ${tier}`, boss: number % 5 === 0, spawns };

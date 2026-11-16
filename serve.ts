@@ -60,6 +60,6 @@ createServer((request, response) => {
     'cache-control': 'no-store',
   });
   createReadStream(file).pipe(response);
-}).listen(port, '127.0.0.1', () => {
-  console.log(`Gravity Shepherd is playable at http://localhost:${port}`);
+}).listen(port, '0.0.0.0', () => {
+  console.log(`LUMENFALL is playable at http://localhost:${port}`);
 });
